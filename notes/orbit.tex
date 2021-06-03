@@ -1,0 +1,174 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{mathrsfs}
+\usepackage{hyperref}
+\begin{document}
+\title{Notes on orbital mechanics}
+
+\maketitle
+\section{Keplerian orbit and orbital elements}
+\textbf{Keplerian orbit} is the motion of one body (the orbiting body)
+relative to another (the central body) if there is only
+point-like gravitational interaction between the two bodies.
+
+\textbf{Orbital elements} are parameters that uniquely identify a specific orbit. 
+There are six orbital elements, where two for the geometry of the ellipse
+(or quadratic curve such as parapola and hyperbola in a more general context),
+three for the orientation of the orbit in a 3D coordinate system and one
+for the position of the celestial body.
+
+\textbf{Eccentricity} ($e$) and \textbf{semimajor axis} ($a$)
+define the shape and size of the orbit.
+\textbf{Longitude of ascending node} ($\Omega$),
+\textbf{inclination} ($i$) and
+\textbf{argument of periapsis} ($\omega$)
+are considered as the proper Euler angles in $z-x'-z''$ order,
+which rotate the orbit from
+\begin{equation}
+  \frac{(x+c)^2}{a^2} + \frac{y^2}{b^2} = 1\text{,}
+  \label{equ:ellipse}
+\end{equation}
+lying on the $xOy$ to an arbitrary plane.
+Either \textbf{True anomaly} ($\nu$), \textbf{mean anomaly} ($M$) or
+\textbf{eccentric anomaly} ($E$) indicates the immediate position of
+the celestial body.
+
+
+\section{Specific orbital energy}
+The \textbf{specific orbital energy} $\epsilon$ of two bodies is the contant
+sum of their mutual potential energy, which is zero at infinite distance, and
+their total kinetic energy, divided by the reduced mass.
+\begin{equation}
+  \epsilon = \frac{v^2}{2} - \frac{\mu}{r}\text{,}
+\end{equation}
+where $v$ is relative orbital speed, $\mu$ is the standard gravitational parameter
+and $r$ is the orbital distance between the two bodies.
+
+The \textbf{characteristic energy} $C_3$ is a measure of the excess specific orbital energy over
+that required to just barely escape from the central body.
+\begin{equation}
+  C_3 = v^2 - \frac{2 \mu}{r} = 2 \epsilon\text{.}
+\end{equation}
+
+The semi-major axis $a$ can be calculated from $\epsilon$ as
+\begin{equation}
+  a = -\frac{\mu}{2 \epsilon}\text{.}
+\end{equation}
+
+When $\epsilon < 0$ the orbiting body is captured by the central body and orbiting it on
+an \textbf{elliptical orbit}, where the semi-major axis $a > 0$.
+When $\epsilon = 0$ the orbiting body has exactly the energy needed to escape from the
+central body and is leaving it on a \textbf{parabolic trajectory},
+where $a \to \infty$.
+When $\epsilon > 0$ the orbiting body has more than enough energy to escape the central
+body and is leaving it on a \textbf{hyperbolic trajectory}, where $a < 0$.
+
+Elliptical (including circular) orbit is called \textbf{capture orbit}
+while parabolic and hyperbolic trajectories are called \textbf{escape orbits}.
+
+\section{Anomalies}
+\subsection{True anomaly}
+\textbf{True anomaly} $\nu$ is the angle between the direction of periapsis and the current
+position of the celestial body, as seen from the main focus of the orbit.
+
+\subsection{Mean anomaly}
+For an elliptical orbit, \textbf{mean anomaly} $M$ is the angle between the direction of the
+periapsis and the current position of a fictitious body which moves in a circular
+orbit with constant speed in the same orbital period as the actual celestial body.
+
+However, for an escape orbit, the motion is not periodic, so mean anomaly is generally
+defined as
+\begin{equation}
+  M = \sqrt{\frac{\mu}{\vert a \vert ^3}}(t - \tau)\text{,}
+  \label{equ:mean-anomaly}
+\end{equation}
+where $\tau$ is the \textbf{epoch}.
+
+Semi-major axis $a \to \infty$ for parabolic trajectory, so mean anomaly here is defined as
+\begin{equation}
+  M_{\mathrm{parabola}} = \sqrt{\frac{\mu}{\ell^3}}(t - \tau)\text{,}
+  \label{equ:mean-anomaly-parabola}
+\end{equation}
+where $\ell$ is semi-latus rectum.
+
+\subsection{Eccentric anomaly}
+For any point on the elliptical orbit specified by Equation \ref{equ:ellipse},
+textbf{eccentric anomaly} $E$ is introduced as
+\begin{equation}
+  \begin{cases}
+    x = a\cos E - c \\
+    y = b\sin E
+  \end{cases}\text{.}
+\end{equation}
+Given the distance
+\begin{equation}
+  \sqrt{x^2+y^2} = r = \frac{a(1 - e^2)}{1 + e \sin \nu}\text{,}
+\end{equation}
+the eccentric anomaly can be calculated from the true anomaly as
+\begin{equation}
+  \cos E = \frac{e + \cos \nu}{1 + e \cos\nu}\text{.}
+  \label{equ:eccentric-anomaly}
+\end{equation}
+
+\subsection{Hyperbolic anomaly}
+Hyperbolic anomaly $H$ is analogous to eccentric anamoly $E$
+(as in Equation \ref{equ:eccentric-anomaly}) as
+\begin{equation}
+  \cosh H = \frac{e + \cos \nu}{1 + e\cos \nu}\text{,}
+\end{equation}
+as well as
+\begin{equation}
+  \begin{cases}
+    x = a \cosh H - c \\
+    y = b \sinh H
+  \end{cases}\text{.}
+\end{equation}
+
+
+\section{Kepler's equation}
+Kepler's equation is used to calculate the position of the orbiting
+body in a Keplerian orbit.
+
+First calculate mean anomaly $M$ at given time with Equation \ref{equ:mean-anomaly}.
+Then calculate eccentric anomaly $E$ from mean anomaly $M$ by solving Kepler's equation
+for elliptical orbit
+\begin{equation}
+  M = E - e \sin E\text{,}
+\end{equation}
+with Newton's method, i.e.,
+\begin{equation}
+  E_{n+1} = E_n - \frac{E_n - e \sin E_n - M}{1 - e \cos E_n}\text{,}
+\end{equation}
+where $E_0 = M$.
+For hyperbolic trajectory calculate hyperbolic anomaly $H$ by solving hyperbolic
+Kepler's equation
+\begin{equation}
+  M = e \sinh H - H\text{.}
+\end{equation}
+When using Newton's method in solving hyperbolic Kepler's equation there are
+situations where it requires division by $0$ so the following fixed point iteration
+is preferred:
+\begin{equation}
+  H_{n+1} = \mathrm{arcsinh}\frac{H_{n} + M}{e}\text{.}
+\end{equation}
+Once either eccentric anomaly or hyperbolic anomaly is calculated the cartesian
+coordinate of the orbiting body can be directly calculated.
+
+\section{Barker's equation}
+Solve Barker's equation which relates the time of flight to true anomaly of a parabolic trajectory
+\begin{equation}
+  6 \sqrt{\frac{\mu}{\ell^3}}(t - \tau) = 3 \tan\frac{\nu}{2} + \tan^3\frac{\nu}{2}\text{,}
+  \label{equ:barker}
+\end{equation}
+where $\ell$ is semi-latus rectum, $\nu$ is true anomaly.
+
+With the substitutions
+\begin{align}
+  M &= \frac{1}{2}\sqrt{\frac{\mu}{\ell^3}}(t - \tau)\quad\text{and} \\
+  N &= \sqrt[3]{3 M + \sqrt{9 M^2 + 1}}\text{,}
+\end{align}
+Equation \ref{equ:barker} can be solved directly
+\begin{equation}
+  \nu = 2 \arctan\left(N - \frac{1}{N}\right)\text{.}
+\end{equation}
+\end{document}
