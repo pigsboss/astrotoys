@@ -35,13 +35,18 @@ nu  - current true anomaly, in rad
         print("longitude of ascending node : {:11.6f} deg".format(np.rad2deg(self.Ome)))
         print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
         print("true anomaly                : {:11.6f} deg".format(np.rad2deg(self.nu)))
+    def state(self, nu):
+        """Return state vector on given true anomaly.
+"""
+        r, v = orbital_motion(self.a, self.ecc, self.inc, self.Ome, self.ome, nu)
+        return r, v
+
     def states(self, N=100):
         """Return equi-angular-distant state vectors (r, v)
 from nu=0 to nu=2*PI on the orbit.
 """
         nu = np.arange(N)/(N-1.)*2.*np.pi
-        r, v = orbital_motion(self.a, self.ecc, self.inc, self.Ome, self.ome, nu)
-        return r, v
+        return self.state(nu)
 
 class Trajectory(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi, nu_midpoint=np.pi):
@@ -95,7 +100,21 @@ nu_midpoint - true anomaly at midpoint of the trajectory
         r, v = orbital_motion(self.a, self.ecc, self.inc, self.Ome, self.ome, nu)
         return r, v
 
-def find_trajectory_mindv(r1, v1, r2, v2, mu, N=1000):
+def find_trajectory_mindv(orb1, orb2, mu, N=1000):
+    """Find the trajectory between two orbits with minimum transfer delta-v.
+"""
+    def eval_dv(nu):
+        r1, v1 = orb1.state(nu[0])
+        r2, v2 = orb2.state(nu[1])
+        traj, opts = find_trajectory_mindv_s2s(r1, v1, r2, v2, mu)
+        return opts['delta_v']
+    dv = np.empty((N, N))
+    for i in range(N):
+        for j in range(N):
+            dv[i, j] = eval_dv((2.*np.pi*i/N, 2.*np.pi*j/N))
+    return dv
+
+def find_trajectory_mindv_s2s(r1, v1, r2, v2, mu, N=1000, verbose=False):
     """Find the trajectory between orbit states (r1, v1) and (r2, v2)
 with minimum overall delta_v.
 
@@ -134,21 +153,24 @@ N is the number of samples where delta_v is evaluated before fine optimization.
     if dv_p[minidx_p+1] < dv_p[0] and dv_p[minidx_p+1] < dv_p[-1]:
         bracket_p = (t[0], t[minidx_p+1], t[-1])
     else:
-        print('Convex region to minimize prograding delta-v is not found.')
-        print('{:f} and {:f} are provided as starting points.'.format(t[0], t[-1]))
+        if verbose:
+            print('Convex region to minimize prograding delta-v is not found.')
+            print('{:f} and {:f} are provided as starting points.'.format(t[0], t[-1]))
         bracket_p = (t[0], t[-1])
     if dv_r[minidx_r+1] < dv_r[0] and dv_r[minidx_r+1] < dv_r[-1]:
         bracket_r = (t[0], t[minidx_r+1], t[-1])
     else:
-        print('Convex region to minimize retrograding delta-v is not found.')
-        print('{:f} and {:f} are provided as starting points.'.format(t[0], t[-1]))
+        if verbose:
+            print('Convex region to minimize retrograding delta-v is not found.')
+            print('{:f} and {:f} are provided as starting points.'.format(t[0], t[-1]))
         bracket_r = (t[0], t[-1])
     res_p = minimize_scalar(dv_all_p, method='brent', bracket=bracket_p)
     if res_p.success:
         t_min_p  = res_p.x
         dv_min_p = dv_all_p(t_min_p)
     else:
-        print('Fine optimization of prograding delta-v failed.')
+        if verbose:
+            print('Fine optimization of prograding delta-v failed.')
         t_min_p  = t[minidx_p+1]
         dv_min_p = dv_p[minidx_p+1]
     res_r = minimize_scalar(dv_all_r, method='brent', bracket=bracket_r)
@@ -156,7 +178,8 @@ N is the number of samples where delta_v is evaluated before fine optimization.
         t_min_r  = res_r.x
         dv_min_r = dv_all_r(t_min_r)
     else:
-        print('Fine optimization of retrograding delta-v failed.')
+        if verbose:
+            print('Fine optimization of retrograding delta-v failed.')
         t_min_r  = t[minidx_r+1]
         dv_min_r = dv_r[minidx_r+1]
     if dv_min_r < dv_min_p:
@@ -194,7 +217,7 @@ N is the number of samples where delta_v is evaluated before fine optimization.
     }
     return traj, opts
 
-def find_trajectory_byeta(r1, v1, r2, v2, mu, eta, N=1000, prograde=True):
+def find_trajectory_byeta_s2s(r1, v1, r2, v2, mu, eta, N=1000, prograde=True):
     """Find the trajectory between orbit states (r1, v1) and (r2, v2)
 with proper ETA (estimated time on arrival), in seconds.
 (r1, v1) is entry orbit state vector.
@@ -204,13 +227,14 @@ eta is estimated time on arrival, in seconds.
 N is the number of samples where ETA is evaluated before the optimization.
 prograde indicates the direction of the trajectory from r1 to r2.
 """
-    def eval_dt2(t):
+    def eval_eta(t):
         _, a, ecc, inc, Ome, ome, nu1, nu2 = find_orbits_f2p(np.double([0., 0., 0.]), r1, r2, t=t)
         M1 = true_anomaly_to_mean_anomaly(nu1, ecc)
         M2 = true_anomaly_to_mean_anomaly(nu2, ecc)
-        return (np.mod(np.sign(prograde-.5)*(M2-M1), 2.*np.pi)*np.sqrt(mu/a**3.)-eta)**2.
+        return np.mod(np.sign(prograde-.5)*(M2-M1), 2.*np.pi)*np.sqrt(mu/a**3.)
     t = ((np.arange(N)+.5)/N - .5)*np.pi
-    dt2 = eval_dt2(t)
+    etas = eval_eta(t)
+    dt2 = (etas-eta)**2.
     minidx = np.argmin(dt2[1:-1])
     minval = dt2[minidx+1]
     if minval<dt2[0] and minval<dt2[-1]:
@@ -219,24 +243,23 @@ prograde indicates the direction of the trajectory from r1 to r2.
         print('Convex region to optimize ETA is not found.')
         print('{:f} and {:f} are provided as starting points.'.format(t[0], t[-1]))
         bracket = (t[0], t[-1])
-    res = minimize_scalar(eval_dt2, method='brent', bracket=bracket)
+    res = minimize_scalar(lambda t:(eval_eta(t)-eta)**2., method='brent', bracket=bracket)
     if res.success:
         t_opt = res.x
-        eta_opt = eval_dt2(t_opt)
     else:
         print('Fine optimization failed.')
         t_opt = t[minidx+1]
-        eta_opt = minval
+    eta_opt = eval_eta(t_opt)
     _, a, ecc, inc, Ome, ome, nu1, nu2 = find_orbits_f2p(np.double([0., 0., 0.]), r1, r2, t=t_opt)
     nu_mid = np.mod((nu1+nu2+np.pi+np.sign(prograde-.5)*np.sign((nu2>nu1)-.5)*np.pi)/2., 2.*np.pi)
     traj = Trajectory(a, ecc, inc, Ome, ome, nu1, nu1, nu2, nu_mid)
     opts = {
         'eta'   : eta_opt,
         't_opt' : t_opt,
-        'nodes' : (t, dt2)
+        'nodes' : (t, etas)
     }
     return traj, opts
-    
+
 def find_orbits_f2p(f, r1, r2, u=None, t=None, t_rng=.95, N=100):
     """Find all possible elliptical orbits, given the main focus f as well as
 two orbital position vectors r1 and r2.
@@ -255,6 +278,8 @@ t   - angular parameter of retrieved orbital elements
 a   - semi-major axes of retrieved orbits
 ecc - eccentricities of retrieved orbits
 """
+    if np.allclose(quaternion.direction(r1-f), quaternion.direction(r2-f)):
+        raise ValueError('singularity encountered.')
     # Find the auxiliary frame of reference, where the origin lies between r1 and r2
     # and r1 lies on the positive half of the x-axis.
     o  = (r1+r2)/2.
@@ -452,7 +477,7 @@ nu  - true anomaly, in rad
                 nu = 2.*np.pi-nu
     return a, ecc, inc, Ome, ome, nu
 
-def orbital_motion(a,ecc,inc,Ome,ome,nu):
+def orbital_motion(a, ecc, inc, Ome, ome, nu):
     """Find motion parameters (position and velocity) of an object on an elliptical orbit,
 given the orbital elements.
 a   - semi-major axis
@@ -774,8 +799,8 @@ def true_anomaly_to_mean_anomaly(f, e):
 f is true anomaly, in rad.
 e is eccentricity.
 """
-    E = np.arctan2(np.sqrt(1. - ecc**2.)*np.sin(f), ecc + np.cos(f))
-    return E - ecc*np.sin(E)
+    E = np.arctan2(np.sqrt(1. - e**2.)*np.sin(f), e + np.cos(f))
+    return E - e*np.sin(E)
 
 def mean_anomaly_to_true_anomaly_series(M, e):
     """Compute true anomaly from eccentricity and mean anomaly with series expansion.
