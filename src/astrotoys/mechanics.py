@@ -126,10 +126,10 @@ res  - optimization result
     ii = np.argmin(np.min(dv, axis=1))
     jj = np.argmin(np.min(dv, axis=0))
     nu0 = (2.*np.pi*ii/N, 2.*np.pi*jj/N)
-    res = basinhopping(eval_dv, nu0, stepsize=np.pi, minimizer_kwargs={
-        'bounds': ((0., 2.*np.pi), (0., 2.*np.pi))
-    })
-    # res = dual_annealing(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)), maxiter=100)
+    # res = basinhopping(eval_dv, nu0, stepsize=np.pi, minimizer_kwargs={
+    #     'bounds': ((0., 2.*np.pi), (0., 2.*np.pi))
+    # })
+    res = dual_annealing(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)), maxiter=100)
     # res = shgo(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)))
     # res = minimize(eval_dv, nu0, bounds=((0., 2.*np.pi), (0., 2.*np.pi)))
     return dv, res
