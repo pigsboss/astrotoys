@@ -3,8 +3,9 @@
 """
 
 import numpy as np
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize_scalar, minimize, basinhopping, shgo, dual_annealing
 import pymath.quaternion as quaternion
+from multiprocessing import Pool
 
 AU_to_km = 149597871.0
 
@@ -100,8 +101,18 @@ nu_midpoint - true anomaly at midpoint of the trajectory
         r, v = orbital_motion(self.a, self.ecc, self.inc, self.Ome, self.ome, nu)
         return r, v
 
-def find_trajectory_mindv(orb1, orb2, mu, N=1000):
+def find_trajectory_mindv(orb1, orb2, mu, N=10):
     """Find the trajectory between two orbits with minimum transfer delta-v.
+Global optimization is used, which could be considerably slow.
+
+orb1 - Orbit object of the initial orbit
+orb2 - Orbit object of the target orbit
+mu   - standard gravitational parameter
+N    - resolution of initial sampling grid
+
+Returns:
+dv   - sampled delta-v (N, N)
+res  - optimization result
 """
     def eval_dv(nu):
         r1, v1 = orb1.state(nu[0])
@@ -111,10 +122,19 @@ def find_trajectory_mindv(orb1, orb2, mu, N=1000):
     dv = np.empty((N, N))
     for i in range(N):
         for j in range(N):
-            dv[i, j] = eval_dv((2.*np.pi*i/N, 2.*np.pi*j/N))
-    return dv
+            dv[i,j] = eval_dv((2.*np.pi*i/N, 2.*np.pi*j/N))
+    ii = np.argmin(np.min(dv, axis=1))
+    jj = np.argmin(np.min(dv, axis=0))
+    nu0 = (2.*np.pi*ii/N, 2.*np.pi*jj/N)
+    res = basinhopping(eval_dv, nu0, stepsize=np.pi, minimizer_kwargs={
+        'bounds': ((0., 2.*np.pi), (0., 2.*np.pi))
+    })
+    # res = dual_annealing(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)), maxiter=100)
+    # res = shgo(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)))
+    # res = minimize(eval_dv, nu0, bounds=((0., 2.*np.pi), (0., 2.*np.pi)))
+    return dv, res
 
-def find_trajectory_mindv_s2s(r1, v1, r2, v2, mu, N=1000, verbose=False):
+def find_trajectory_mindv_s2s(r1, v1, r2, v2, mu, N=20, verbose=False):
     """Find the trajectory between orbit states (r1, v1) and (r2, v2)
 with minimum overall delta_v.
 
@@ -129,6 +149,37 @@ The main focus is at the origin of the frame of reference.
 mu is standard gravitational parameter.
 N is the number of samples where delta_v is evaluated before fine optimization.
 """
+    r1u = quaternion.direction(r1) # unit vector along r1
+    r2u = quaternion.direction(r2) # unit vector along r2
+    if np.allclose(r1u, r2u):
+        # degenerate to 1D oscillator
+        r1mag = quaternion.norm(r1)
+        r2mag = quaternion.norm(r2)
+        v1p   = np.dot(r1u, v1) # magnitude of parallel component of v1
+        v2p   = np.dot(r2u, v2) # magnitude of parallel component of v2
+        v1t   = v1-v1p*r1u      # vertical component of v1
+        v2t   = v2-v2p*r2u      # vertical component of v2
+        if r1mag >= r2mag:
+            if v2p >= 0.:
+                dv1p = 0.
+                dv2p =  np.sqrt(2.*mu*(r1mag-r2mag)/r1mag/r2mag+v1p**2.)-v2p
+            else:
+                dv1p = 0.
+                dv2p = -np.sqrt(2.*mu*(r1mag-r2mag)/r1mag/r2mag+v1p**2.)-v2p
+        else:
+            if v1p >= 0.:
+                dv1p =  np.sqrt(2.*mu*(r2mag-r1mag)/r1mag/r2mag+v2p**2.)-v1p
+                dv2p = 0.
+            else:
+                dv1p = -np.sqrt(2.*mu*(r2mag-r1mag)/r1mag/r2mag+v2p**2.)-v1p
+                dv2p = 0.
+        dv1 = dv1p*r1u-v1t
+        dv2 = v2t-dv2p*r2u
+        return None, {
+            'dv_entry': dv1,
+            'dv_exit' : dv2,
+            'delta_v' : quaternion.norm(dv1)+quaternion.norm(dv2)
+        }
     def dv_all_p(t):
         _, a, ecc, inc, Ome, ome, nu1, nu2 = find_orbits_f2p(np.double([0., 0., 0.]), r1, r2, t=t)
         r_entry, v_entry = orbital_motion(a, ecc, inc, Ome, ome, nu1)
