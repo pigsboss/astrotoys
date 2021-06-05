@@ -129,8 +129,8 @@ res  - optimization result
     # res = basinhopping(eval_dv, nu0, stepsize=np.pi, minimizer_kwargs={
     #     'bounds': ((0., 2.*np.pi), (0., 2.*np.pi))
     # })
-    res = dual_annealing(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)), maxiter=100)
-    # res = shgo(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)))
+    # res = dual_annealing(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)), maxiter=100)
+    res = shgo(eval_dv, ((0., 2.*np.pi), (0., 2.*np.pi)))
     # res = minimize(eval_dv, nu0, bounds=((0., 2.*np.pi), (0., 2.*np.pi)))
     return dv, res
 
@@ -346,6 +346,7 @@ ecc - eccentricities of retrieved orbits
             u = np.double([0., 0., 1.])
         else:
             u = quaternion.direction(u)
+        u = u*(np.sign(u[2])+(u[2]==0.))
     a  = quaternion.direction(r1-r2) # axis-vector, i.e., x-axis of the orbit-fixed frame
     q  = quaternion.from_axes(a, u)  # quaternion that rotates the fiducial frame to the orbit-fixed frame
     qc = quaternion.conjugate(q)     # quaternion that convert coordinates from the fiducial frame to the orbit-fixed frame
