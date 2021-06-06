@@ -3,6 +3,7 @@
 """
 
 import numpy as np
+import numexpr as ne
 from scipy.optimize import minimize_scalar, minimize, basinhopping, shgo, dual_annealing
 import pymath.quaternion as quaternion
 from multiprocessing import Pool
