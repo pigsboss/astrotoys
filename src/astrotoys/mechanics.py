@@ -119,13 +119,14 @@ res  - optimization result
         r2, v2 = orb2.state(nu[1])
         traj, opts = find_trajectory_mindv_s2s(r1, v1, r2, v2, mu)
         return opts['delta_v']
-    dv = np.empty((N, N))
-    for i in range(N):
-        for j in range(N):
-            dv[i,j] = eval_dv((2.*np.pi*i/N, 2.*np.pi*j/N))
-    ii = np.argmin(np.min(dv, axis=1))
-    jj = np.argmin(np.min(dv, axis=0))
-    nu0 = (2.*np.pi*ii/N, 2.*np.pi*jj/N)
+    if N>0:
+        dv = np.empty((N, N))
+        for i in range(N):
+            for j in range(N):
+                dv[i,j] = eval_dv((2.*np.pi*i/N, 2.*np.pi*j/N))
+        ii = np.argmin(np.min(dv, axis=1))
+        jj = np.argmin(np.min(dv, axis=0))
+        nu0 = (2.*np.pi*ii/N, 2.*np.pi*jj/N)
     # res = basinhopping(eval_dv, nu0, stepsize=np.pi, minimizer_kwargs={
     #     'bounds': ((0., 2.*np.pi), (0., 2.*np.pi))
     # })
@@ -135,8 +136,8 @@ res  - optimization result
     return dv, res
 
 def find_trajectory_mindv_s2s(r1, v1, r2, v2, mu, N=20, verbose=False):
-    """Find the trajectory between orbit states (r1, v1) and (r2, v2)
-with minimum overall delta_v.
+    """Find the trajectory between orbit states (r1, v1) and (r2, v2) on the
+same plane with minimum overall delta_v.
 
 delta_v_overall = delta_v_entry + delta_v_exit,
 where delta_v_entry is the impulse per unit of spacecraft mass that is needed
@@ -149,6 +150,12 @@ The main focus is at the origin of the frame of reference.
 mu is standard gravitational parameter.
 N is the number of samples where delta_v is evaluated before fine optimization.
 """
+    h1 = np.cross(r1, v1)
+    h2 = np.cross(r2, v2)
+    u1 = quaternion.direction(h1)*(np.sign(h1[2])+(h1[2]==0.))
+    u2 = quaternion.direction(h2)*(np.sign(h2[2])+(h2[2]==0.))
+    if not np.allclose(u1, u2):
+        raise ValueError('state vectors are not on the same plane.')
     r1u = quaternion.direction(r1) # unit vector along r1
     r2u = quaternion.direction(r2) # unit vector along r2
     if np.allclose(r1u, r2u):
