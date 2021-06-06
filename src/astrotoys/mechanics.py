@@ -12,21 +12,23 @@ AU_to_km = 149597871.0
 DEPS = np.finfo('float64').eps
 
 class Orbit(object):
-    def __init__(self, a, ecc, inc, Ome, ome, nu):
+    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0=0.):
         """Construct an elliptical orbit by elements.
 a   - semi-major axis
 ecc - eccentricity
 inc - inclination, in rad
 Ome - longitude of ascending node, in rad
 ome - argument of periapsis, in rad
-nu  - current true anomaly, in rad
+nu0 - true anomaly at epoch (default: J2000), in rad
+t0  - epoch since J2000, in JD
 """
         self.a   = a
         self.ecc = ecc
         self.inc = inc
         self.Ome = Ome
         self.ome = ome
-        self.nu  = nu
+        self.nu0 = nu0
+        self.t0  = t0
     def pprint(self):
         """Print with pretty format.
 """
@@ -35,13 +37,13 @@ nu  - current true anomaly, in rad
         print("inclination                 : {:11.6f} deg".format(np.rad2deg(self.inc)))
         print("longitude of ascending node : {:11.6f} deg".format(np.rad2deg(self.Ome)))
         print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
-        print("true anomaly                : {:11.6f} deg".format(np.rad2deg(self.nu)))
+        print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
+        print("epoch                       : {:11.6f} JD".format(self.t0))
     def state(self, nu):
         """Return state vector on given true anomaly.
 """
         r, v = orbital_motion(self.a, self.ecc, self.inc, self.Ome, self.ome, nu)
         return r, v
-
     def states(self, N=100):
         """Return equi-angular-distant state vectors (r, v)
 from nu=0 to nu=2*PI on the orbit.
@@ -797,46 +799,45 @@ a    - half of semi-latus rectum for parabolic orbit, in AU.
     y   = rho*np.sin(nu)
     return x,y,rho,nu
 
-def hyperbolic_anomaly(M, ecc, eps=10.0*DEPS, max_loops=100):
+def hyperbolic_anomaly(M, ecc, max_loops=100):
     """Calculate hyperbolic anomaly from mean anomaly and eccentricity.
 
 M is mean anomaly.
 ecc is eccentricity.
-eps is the error bound for fixed point iteration.
 max_loops is the maximum number of loops.
 
 The hyperbolic anomaly H is calculated by solving the following equation
 with fixed point iteration:
 M = ecc * sinh(H) - H
 """
-    H = M
-    t = 0
-    d = np.pi
-    while t < max_loops and np.any(np.abs(d) > eps):
-        Hn = np.arcsinh((H+M)/ecc)
-        d  = Hn - H
-        H  = Hn
+    H  = np.copy(M)
+    t  = 0
+    d  = np.ones_like(M)*np.pi
+    Hn = np.empty_like(M)
+    while t < max_loops or np.allclose(d, 0.):
+        Hn[:] = np.arcsinh((H+M)/ecc)
+        d[:]  = Hn - H
+        H[:]  = Hn
         t += 1
     return H
 
-def eccentric_anomaly(M, ecc, eps=10.0*DEPS, max_loops=100):
+def eccentric_anomaly(M, ecc, max_loops=100):
     """Calculate eccentric anomaly from mean anomaly and eccentricity.
 
 M         is mean anomaly.
 ecc       is eccentricity.
-eps       is the error bound for Newton's method.
 max_loops is the maximum number of loops.
 
 The eccentric anomaly E is calculated by solving the following equation
 with Newton's method:
 M = E - ecc * sin(E)
 """
-    E = M
+    E = np.copy(M)
     t = 0
-    d = np.pi
-    while t < max_loops and np.any(np.abs(d) > eps):
-        d  = (E - ecc*np.sin(E) - M) / (1.0 - ecc*np.cos(E))
-        E  = E - d
+    d = np.pi*np.ones_like(M)
+    while t < max_loops or np.allclose(d, 0.):
+        d[:] = (E - ecc*np.sin(E) - M) / (1.0 - ecc*np.cos(E))
+        E[:] = E - d
         t += 1
     return E
 
