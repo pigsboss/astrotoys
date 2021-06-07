@@ -30,6 +30,7 @@ t0  - epoch since J2000, in JD
         self.ome = ome
         self.nu0 = nu0
         self.t0  = t0
+
     def pprint(self):
         """Print with pretty format.
 """
@@ -40,17 +41,68 @@ t0  - epoch since J2000, in JD
         print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
         print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
         print("epoch                       : {:11.6f} JD".format(self.t0))
+
     def state(self, nu):
         """Return state vector on given true anomaly.
 """
-        r, v = orbital_motion(self.a, self.ecc, self.inc, self.Ome, self.ome, nu)
+        a   = self.a
+        ecc = self.ecc
+        inc = self.inc
+        Ome = self.Ome
+        ome = self.ome
+        p       = ne.evaluate('abs(1.-ecc**2.)*a'   )
+        sqrtp   = ne.evaluate('sqrt(p)'             )
+        cosnu   = ne.evaluate('cos(nu)'             )
+        sinnu   = ne.evaluate('sin(nu)'             )
+        rho     = ne.evaluate('p/(1.+ecc*cosnu)'    )
+        rx      = ne.evaluate('rho*cosnu'           )
+        ry      = ne.evaluate('rho*sinnu'           )
+        vr      = ne.evaluate('ecc*sinnu/sqrtp'     )
+        vt      = ne.evaluate('(1.+ecc*cosnu)/sqrtp')
+        vx      = ne.evaluate('vr*cosnu-vt*sinnu'   )
+        vy      = ne.evaluate('vr*sinnu+vt*cosnu'   )
+        x       = ne.evaluate('.5*inc'              )
+        y       = ne.evaluate('.5*Ome + .5*ome'     )
+        z       = ne.evaluate('.5*Ome - .5*ome'     )
+        sin2x   = ne.evaluate('sin(x)*sin(x)'       )
+        cos2x   = ne.evaluate('1.-sin2x'            )
+        sin2y   = ne.evaluate('sin(y)*sin(y)'       )
+        sin2z   = ne.evaluate('sin(z)*sin(z)'       )
+        sincosy = ne.evaluate('sin(y)*cos(y)'       )
+        sincosz = ne.evaluate('sin(z)*cos(z)'       )
+        mxx     = ne.evaluate('-2.*sin2x*sin2z-2.*cos2x*sin2y+1.'     )
+        mxy     = ne.evaluate( '2.*sin2x*sincosz-2.*cos2x*sincosy'    )
+        mxz     = ne.evaluate('.5*cos(Ome-inc)-.5*cos(Ome+inc)'       )
+        myx     = ne.evaluate( '2.*sin2x*sincosz+2.*cos2x*sincosy'    )
+        myy     = ne.evaluate('-2.*sin2x*(1.-sin2z)-2.*cos2x*sin2y+1.')
+        myz     = ne.evaluate('.5*sin(Ome-inc)-.5*sin(Ome+inc)'       )
+        mzx     = ne.evaluate('.5*cos(inc-ome)-.5*cos(inc+ome)'       )
+        mzy     = ne.evaluate('.5*sin(inc-ome)+.5*sin(inc+ome)'       )
+        mzz     = ne.evaluate(   'cos(inc)'                           )
+        r       = np.double([
+            ne.evaluate('mxx*rx+mxy*ry'),
+            ne.evaluate('myx*rx+myy*ry'),
+            ne.evaluate('mzx*rx+mzy*ry')
+        ])
+        v       = np.double([
+            ne.evaluate('mxx*vx+mxy*vy'),
+            ne.evaluate('myx*vx+myy*vy'),
+            ne.evaluate('mzx*vx+mzy*vy')
+        ])
         return r, v
-    def states(self, N=100):
+
+    def allstates(self, N=100):
         """Return equi-angular-distant state vectors (r, v)
 from nu=0 to nu=2*PI on the orbit.
 """
         nu = np.arange(N)/(N-1.)*2.*np.pi
         return self.state(nu)
+
+    def state_when(self, t):
+        """Return state vector on given time t.
+"""
+        
+        return r, v
 
 class Trajectory(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi, nu_midpoint=np.pi):
@@ -88,7 +140,7 @@ nu_midpoint - true anomaly at midpoint of the trajectory
             np.rad2deg(self.nu_stop),
             np.rad2deg(self.nu_midpoint)
         ))
-    def states(self, N=100):
+    def allstates(self, N=100):
         """Return equi-angular-distant state vectors from nu_start to nu_stop.
 """
         if self.prograde:
@@ -101,7 +153,7 @@ nu_midpoint - true anomaly at midpoint of the trajectory
                 nu = np.arange(N)/(N-1.)*(self.nu_stop-self.nu_start)+self.nu_start
             else:
                 nu = np.arange(N)/(N-1.)*(self.nu_stop-2.*np.pi-self.nu_start)+self.nu_start
-        r, v = orbital_motion(self.a, self.ecc, self.inc, self.Ome, self.ome, nu)
+        r, v = self.state(nu)
         return r, v
 
 def find_trajectory_mindv(orb1, orb2, mu, N=10):
@@ -699,24 +751,35 @@ Ome - longitude of the ascending node, in rad.
 dec - inclination of the orbit plane, in rad.
 ome - argument of periapsis, in rad.
 """
-    qz = np.double([
-        np.cos(Ome*0.5),
-        np.zeros_like(Ome),
-        np.zeros_like(Ome),
-        np.sin(Ome*0.5)])
-    X  = quaternion.rotate(qz, [1.0, 0.0, 0.0])
-    qX = np.double([
-        np.cos(dec*0.5),
-        np.sin(dec*0.5)*X[0],
-        np.sin(dec*0.5)*X[1],
-        np.sin(dec*0.5)*X[2]])
-    Z  = quaternion.rotate(qX, [0.0, 0.0, 1.0])
-    qZ = np.double([
-        np.cos(ome*0.5),
-        np.sin(ome*0.5)*Z[0],
-        np.sin(ome*0.5)*Z[1],
-        np.sin(ome*0.5)*Z[2]])
-    return quaternion.multiply(qZ, quaternion.multiply(qX, qz))
+    a = ne.evaluate('.5*dec')
+    b = ne.evaluate('.5*Ome + .5*ome')
+    c = ne.evaluate('.5*Ome - .5*ome')
+    return np.double([
+        ne.evaluate('cos(a)*cos(b)'),
+        ne.evaluate('sin(a)*cos(c)'),
+        ne.evaluate('sin(a)*sin(c)'),
+        ne.evaluate('cos(a)*sin(b)')
+    ])
+## def qo2e_ref(Ome, dec, ome):
+##     qz = np.double([
+##         np.cos(Ome*0.5),
+##         np.zeros_like(Ome),
+##         np.zeros_like(Ome),
+##         np.sin(Ome*0.5)])
+##     X  = quaternion.rotate(qz, [1.0, 0.0, 0.0])
+##     qX = np.double([
+##         np.cos(dec*0.5),
+##         np.sin(dec*0.5)*X[0],
+##         np.sin(dec*0.5)*X[1],
+##         np.sin(dec*0.5)*X[2]])
+##     Z  = quaternion.rotate(qX, [0.0, 0.0, 1.0])
+##     qZ = np.double([
+##         np.cos(ome*0.5),
+##         np.sin(ome*0.5)*Z[0],
+##         np.sin(ome*0.5)*Z[1],
+##         np.sin(ome*0.5)*Z[2]])
+##     return quaternion.multiply(qZ, quaternion.multiply(qX, qz))
+
 
 def qe2o(Ome, dec, ome):
     """Quaternion that converts coordinates on ecliptic plane to orbit plane.
