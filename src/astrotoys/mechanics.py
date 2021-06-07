@@ -98,10 +98,10 @@ from nu=0 to nu=2*PI on the orbit.
         nu = np.arange(N)/(N-1.)*2.*np.pi
         return self.state(nu)
 
-    def state_when(self, t):
+    def state_when(self, t, mu):
         """Return state vector on given time t.
 """
-        
+        M0 = true_anomaly_to_mean_anomaly(self.nu0, self.ecc)
         return r, v
 
 class Trajectory(Orbit):
