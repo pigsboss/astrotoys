@@ -13,7 +13,7 @@ AU_to_km = 149597871.0
 DEPS = np.finfo('float64').eps
 
 class Orbit(object):
-    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0=0.):
+    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0=0., mu=1.):
         """Construct an elliptical orbit by elements.
 a   - semi-major axis
 ecc - eccentricity
@@ -21,7 +21,13 @@ inc - inclination, in rad
 Ome - longitude of ascending node, in rad
 ome - argument of periapsis, in rad
 nu0 - true anomaly at epoch (default: J2000), in rad
-t0  - epoch since J2000, in JD
+t0  - epoch since J2000 (default: 0)
+mu  - standard gravitational parameter (default: 1.)
+      Examples:
+      1. mu is in unit of G * solar_mass and the semi-major axis
+         is in unit of AU, time is in unit of Jyr.
+      2. mu is in unit of G * earth_mass and the semi-major axis
+         is in unit GSO radius, time is in unit of sidereal day.
 """
         self.a   = a
         self.ecc = ecc
@@ -30,6 +36,8 @@ t0  - epoch since J2000, in JD
         self.ome = ome
         self.nu0 = nu0
         self.t0  = t0
+        self.mu  = mu
+        self.M0  = true_anomaly_to_mean_anomaly(self.nu0, self.ecc)
 
     def pprint(self):
         """Print with pretty format.
@@ -40,7 +48,7 @@ t0  - epoch since J2000, in JD
         print("longitude of ascending node : {:11.6f} deg".format(np.rad2deg(self.Ome)))
         print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
         print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
-        print("epoch                       : {:11.6f} JD".format(self.t0))
+        print("epoch                       : {:11.6f}".format(self.t0))
 
     def state(self, nu):
         """Return state vector on given true anomaly.
@@ -98,11 +106,12 @@ from nu=0 to nu=2*PI on the orbit.
         nu = np.arange(N)/(N-1.)*2.*np.pi
         return self.state(nu)
 
-    def state_when(self, t, mu):
-        """Return state vector on given time t.
+    def state_when(self, t):
+        """Return state vector(s) at given time.
 """
-        M0 = true_anomaly_to_mean_anomaly(self.nu0, self.ecc)
-        return r, v
+        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)
+        nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
+        return self.state(nu)
 
 class Trajectory(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi, nu_midpoint=np.pi):
@@ -874,14 +883,13 @@ The hyperbolic anomaly H is calculated by solving the following equation
 with fixed point iteration:
 M = ecc * sinh(H) - H
 """
-    H  = np.copy(M)
+    H  = M
     t  = 0
-    d  = np.ones_like(M)*np.pi
-    Hn = np.empty_like(M)
-    while t < max_loops or np.allclose(d, 0.):
-        Hn[:] = np.arcsinh((H+M)/ecc)
-        d[:]  = Hn - H
-        H[:]  = Hn
+    d  = np.pi
+    while t < max_loops and not np.allclose(d, 0.):
+        Hn = np.arcsinh((H+M)/ecc)
+        d  = Hn - H
+        H  = Hn
         t += 1
     return H
 
@@ -896,12 +904,12 @@ The eccentric anomaly E is calculated by solving the following equation
 with Newton's method:
 M = E - ecc * sin(E)
 """
-    E = np.copy(M)
+    E = M
     t = 0
-    d = np.pi*np.ones_like(M)
-    while t < max_loops or np.allclose(d, 0.):
-        d[:] = (E - ecc*np.sin(E) - M) / (1.0 - ecc*np.cos(E))
-        E[:] = E - d
+    d = np.pi
+    while t < max_loops and not np.allclose(d, 0.):
+        d  = (E - ecc*np.sin(E) - M) / (1.0 - ecc*np.cos(E))
+        E  = E - d
         t += 1
     return E
 
