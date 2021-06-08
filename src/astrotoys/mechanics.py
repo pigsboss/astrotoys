@@ -9,7 +9,6 @@ import pymath.quaternion as quaternion
 from multiprocessing import Pool
 
 AU_to_km = 149597871.0
-
 # standard gravitational_parameters of selected bodies, in m^3/s^2.
 mu_SI = {
     'sun'     : 1.32712440018e20,
@@ -27,7 +26,6 @@ mu_SI = {
     'eris'    : 1.108e12
 }
 DEPS = np.finfo('float64').eps
-
 class Orbit(object):
     def __init__(self, a, ecc, inc, Ome, ome, nu0, t0=0., mu=1.):
         """Construct an elliptical orbit by elements.
@@ -54,7 +52,6 @@ mu  - standard gravitational parameter (default: 1.)
         self.t0  = t0
         self.mu  = mu
         self.M0  = true_anomaly_to_mean_anomaly(self.nu0, self.ecc)
-
     def pprint(self):
         """Print with pretty format.
 """
@@ -65,7 +62,6 @@ mu  - standard gravitational parameter (default: 1.)
         print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
         print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
         print("epoch                       : {:11.6f}".format(self.t0))
-
     def state(self, nu):
         """Return state vector on given true anomaly.
 """
@@ -114,21 +110,18 @@ mu  - standard gravitational parameter (default: 1.)
             ne.evaluate('mzx*vx+mzy*vy')
         ])
         return r, v
-
     def allstates(self, N=100):
         """Return equi-angular-distant state vectors (r, v)
 from nu=0 to nu=2*PI on the orbit.
 """
         nu = np.arange(N)/(N-1.)*2.*np.pi
         return self.state(nu)
-
     def state_when(self, t):
         """Return state vector(s) at given time.
 """
         M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
-
 class PlanetOrbit(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu0, t0):
         """Construct an orbit for a planet-like object of solar system,
@@ -160,7 +153,6 @@ t0  - epoch, in JD
         M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)/365.25
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
-
 class SatelliteOrbit(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu0, t0):
         """Construct an orbit for an Earth-orbit satellite.
@@ -191,7 +183,6 @@ t0  - epoch, in JD
         M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
-
 class Trajectory(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi, nu_midpoint=np.pi):
         """Construct an elliptical trajectory by elements and extra parameters.
@@ -243,10 +234,9 @@ nu_midpoint - true anomaly at midpoint of the trajectory
                 nu = np.arange(N)/(N-1.)*(self.nu_stop-2.*np.pi-self.nu_start)+self.nu_start
         r, v = self.state(nu)
         return r, v
-
 class RocketTrajectory(Trajectory):
-    def __init__(self, a, ecc, inc, Ome, ome, nu)
-
+    def __init__(self, a, ecc, inc, Ome, ome, nu):
+        pass
 def find_trajectory_mindv(orb1, orb2, mu, N=10):
     """Find the trajectory between two orbits with minimum transfer delta-v.
 Global optimization is used, which could be considerably slow.
