@@ -10,6 +10,22 @@ from multiprocessing import Pool
 
 AU_to_km = 149597871.0
 
+# standard gravitational_parameters of selected bodies, in m^3/s^2.
+mu_SI = {
+    'sun'     : 1.32712440018e20,
+    'mercury' : 2.2032e13,
+    'venus'   : 3.24859e14,
+    'earth'   : 3.986004418e14,
+    'moon'    : 4.9048695e12,
+    'mars'    : 4.282837e13,
+    'ceres'   : 6.26325e10,
+    'jupiter' : 1.26686534e17,
+    'saturn'  : 3.7931187e16,
+    'uranus'  : 5.793939e15,
+    'neptune' : 6.836529e15,
+    'pluto'   : 8.71e11,
+    'eris'    : 1.108e12
+}
 DEPS = np.finfo('float64').eps
 
 class Orbit(object):
@@ -113,6 +129,69 @@ from nu=0 to nu=2*PI on the orbit.
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 
+class PlanetOrbit(Orbit):
+    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0):
+        """Construct an orbit for a planet-like object of solar system,
+such as planets, asteroids as well as comets.
+
+Arguments:
+a   - semi-major axis, in AU
+ecc - eccentricity
+inc - inclination, in rad
+Ome - ecliptical longitude of ascending node, in rad
+ome - argument of perihelion, in rad
+nu0 - true anomaly at epoch, in rad
+t0  - epoch, in JD
+"""
+        super(PlanetOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0, t0=t0, mu=1.)
+    def pprint(self):
+        """Print with pretty format.
+"""
+        print("semi-major axis             : {:15.6E} AU".format(self.a))
+        print("eccentricity                : {:11.6f}".format(self.ecc))
+        print("inclination                 : {:11.6f} deg".format(np.rad2deg(self.inc)))
+        print("longitude of ascending node : {:11.6f} deg".format(np.rad2deg(self.Ome)))
+        print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
+        print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
+        print("epoch                       : {:11.6f} JD".format(self.t0))
+    def state_when(self, t):
+        """Return state vector(s) at given time, in JD.
+"""
+        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)/365.25
+        nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
+        return self.state(nu)
+
+class SatelliteOrbit(Orbit):
+    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0):
+        """Construct an orbit for an Earth-orbit satellite.
+
+Arguments:
+a   - semi-major axis, in km
+ecc - eccentricity
+inc - inclination, in rad
+Ome - longitude of ascending node, in rad
+ome - argument of perigee, in rad
+nu0 - true anomaly at epoch, in rad
+t0  - epoch, in JD
+"""
+        super(SatelliteOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0, t0=t0, mu=mu_SI['earth'])
+    def pprint(self):
+        """Print with pretty format.
+"""
+        print("semi-major axis             : {:15.6E} km".format(self.a))
+        print("eccentricity                : {:11.6f}".format(self.ecc))
+        print("inclination                 : {:11.6f} deg".format(np.rad2deg(self.inc)))
+        print("longitude of ascending node : {:11.6f} deg".format(np.rad2deg(self.Ome)))
+        print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
+        print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
+        print("epoch                       : {:11.6f} JD".format(self.t0))
+    def state_when(self, t):
+        """Return state vector(s) at given time since epoch, in second.
+"""
+        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
+        nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
+        return self.state(nu)
+
 class Trajectory(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi, nu_midpoint=np.pi):
         """Construct an elliptical trajectory by elements and extra parameters.
@@ -164,6 +243,9 @@ nu_midpoint - true anomaly at midpoint of the trajectory
                 nu = np.arange(N)/(N-1.)*(self.nu_stop-2.*np.pi-self.nu_start)+self.nu_start
         r, v = self.state(nu)
         return r, v
+
+class RocketTrajectory(Trajectory):
+    def __init__(self, a, ecc, inc, Ome, ome, nu)
 
 def find_trajectory_mindv(orb1, orb2, mu, N=10):
     """Find the trajectory between two orbits with minimum transfer delta-v.
