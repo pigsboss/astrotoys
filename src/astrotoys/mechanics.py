@@ -173,7 +173,7 @@ ome - argument of perigee, in rad
 nu0 - true anomaly at epoch, in rad
 t0  - epoch, in JD
 """
-        super(SatelliteOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=mu_SI['earth']) 
+        super(SatelliteOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=mu_SI['earth']/1e9)
     def pprint(self):
         """Print with pretty format.
 """
@@ -185,7 +185,7 @@ t0  - epoch, in JD
         print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
         print("epoch                       : {:11.6f} JD".format(self.t0))
 
-    def state_when(self):
+    def state_when(self, t):
         """Return state vector(s) at given time since epoch, in second.
 """
         M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
@@ -244,7 +244,7 @@ nu_ends - true anomalies of the two endpoints of the trajectory, in (nu_start, n
 nu0     - true anomaly at epoch, in rad
 t0      - epoch, in JD
 """
-        super(RocketTrajectory, self).__init__(a, ecc, inc, Ome, ome, nu_ends, nu0=nu0, t0=t0, mu=mu_SI['earth'])
+        super(RocketTrajectory, self).__init__(a, ecc, inc, Ome, ome, nu_ends, nu0=nu0, t0=t0, mu=mu_SI['earth']/1e9)
     def pprint(self):
         """Print with pretty format.
 """
@@ -713,14 +713,46 @@ Returns:
 r - position vector, in the same dimension as a.
 v - normalized velocity vector, in UNIT_OF_LENGTH / UNIT_OF_TIME / sqrt(standard gravitational parameter).
 """
-    p = np.abs(1. - ecc**2.) * a # semi-latus, valid for circular, elliptical and hyperbolic orbits. 
-    q = qo2e(Ome, inc, ome) # quaternion that converts coordinates on orbital plane to initial coordinate system.
-    rho = p / (1. + ecc*np.cos(nu))
-    r = np.array([rho*np.cos(nu), rho*np.sin(nu), np.zeros_like(rho)])
-    v_r = ecc*np.sin(nu)/np.sqrt(p)
-    v_t = (1.+ecc*np.cos(nu))/np.sqrt(p)
-    v = np.array([v_r*np.cos(nu) - v_t*np.sin(nu), v_r*np.sin(nu) + v_t*np.cos(nu), np.zeros_like(rho)])
-    return quaternion.rotate(q, r), quaternion.rotate(q, v)
+    p       = ne.evaluate('abs(1.-ecc**2.)*a'   )
+    sqrtp   = ne.evaluate('sqrt(p)'             )
+    cosnu   = ne.evaluate('cos(nu)'             )
+    sinnu   = ne.evaluate('sin(nu)'             )
+    rho     = ne.evaluate('p/(1.+ecc*cosnu)'    )
+    rx      = ne.evaluate('rho*cosnu'           )
+    ry      = ne.evaluate('rho*sinnu'           )
+    vr      = ne.evaluate('ecc*sinnu/sqrtp'     )
+    vt      = ne.evaluate('(1.+ecc*cosnu)/sqrtp')
+    vx      = ne.evaluate('vr*cosnu-vt*sinnu'   )
+    vy      = ne.evaluate('vr*sinnu+vt*cosnu'   )
+    x       = ne.evaluate('.5*inc'              )
+    y       = ne.evaluate('.5*Ome + .5*ome'     )
+    z       = ne.evaluate('.5*Ome - .5*ome'     )
+    sin2x   = ne.evaluate('sin(x)*sin(x)'       )
+    cos2x   = ne.evaluate('1.-sin2x'            )
+    sin2y   = ne.evaluate('sin(y)*sin(y)'       )
+    sin2z   = ne.evaluate('sin(z)*sin(z)'       )
+    sincosy = ne.evaluate('sin(y)*cos(y)'       )
+    sincosz = ne.evaluate('sin(z)*cos(z)'       )
+    mxx     = ne.evaluate('-2.*sin2x*sin2z-2.*cos2x*sin2y+1.'     )
+    mxy     = ne.evaluate( '2.*sin2x*sincosz-2.*cos2x*sincosy'    )
+    mxz     = ne.evaluate('.5*cos(Ome-inc)-.5*cos(Ome+inc)'       )
+    myx     = ne.evaluate( '2.*sin2x*sincosz+2.*cos2x*sincosy'    )
+    myy     = ne.evaluate('-2.*sin2x*(1.-sin2z)-2.*cos2x*sin2y+1.')
+    myz     = ne.evaluate('.5*sin(Ome-inc)-.5*sin(Ome+inc)'       )
+    mzx     = ne.evaluate('.5*cos(inc-ome)-.5*cos(inc+ome)'       )
+    mzy     = ne.evaluate('.5*sin(inc-ome)+.5*sin(inc+ome)'       )
+    mzz     = ne.evaluate(   'cos(inc)'                           )
+    r       = np.double([
+        ne.evaluate('mxx*rx+mxy*ry'),
+        ne.evaluate('myx*rx+myy*ry'),
+        ne.evaluate('mzx*rx+mzy*ry')
+    ])
+    v       = np.double([
+        ne.evaluate('mxx*vx+mxy*vy'),
+        ne.evaluate('myx*vx+myy*vy'),
+        ne.evaluate('mzx*vx+mzy*vy')
+    ])
+    return r, v
 
 def orbital_elements_to_rotation_matrix_inverse(Ome, inc, ome):
     return np.matrix([
