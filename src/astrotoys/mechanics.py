@@ -27,7 +27,7 @@ mu_SI = {
 }
 DEPS = np.finfo('float64').eps
 class Orbit(object):
-    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0=0., mu=1.):
+    def __init__(self, a, ecc, inc, Ome, ome, nu0=0., t0=0., mu=1.):
         """Construct an elliptical orbit by elements.
 a   - semi-major axis
 ecc - eccentricity
@@ -122,8 +122,15 @@ from nu=0 to nu=2*PI on the orbit.
         M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
+    def reverse(self):
+        """Reverse the direction of the orbit.
+"""
+        self.inc = np.pi-self.inc
+        self.Ome = np.mod(np.pi+self.Ome, 2.*np.pi)
+        self.ome = np.mod(np.pi-self.ome, 2.*np.pi)
+        self.nu0 = np.mod(     -self.nu0, 2.*np.pi)
 class PlanetOrbit(Orbit):
-    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0):
+    def __init__(self, a, ecc, inc, Ome, ome, nu0=0., t0=0.):
         """Construct an orbit for a planet-like object of solar system,
 such as planets, asteroids as well as comets.
 
@@ -136,7 +143,7 @@ ome - argument of perihelion, in rad
 nu0 - true anomaly at epoch, in rad
 t0  - epoch, in JD
 """
-        super(PlanetOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0, t0=t0, mu=1.)
+        super(PlanetOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=1.)
     def pprint(self):
         """Print with pretty format.
 """
@@ -154,7 +161,7 @@ t0  - epoch, in JD
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 class SatelliteOrbit(Orbit):
-    def __init__(self, a, ecc, inc, Ome, ome, nu0, t0):
+    def __init__(self, a, ecc, inc, Ome, ome, nu0=0., t0=0.):
         """Construct an orbit for an Earth-orbit satellite.
 
 Arguments:
@@ -166,7 +173,7 @@ ome - argument of perigee, in rad
 nu0 - true anomaly at epoch, in rad
 t0  - epoch, in JD
 """
-        super(SatelliteOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0, t0=t0, mu=mu_SI['earth'])
+        super(SatelliteOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=mu_SI['earth']) 
     def pprint(self):
         """Print with pretty format.
 """
@@ -177,66 +184,86 @@ t0  - epoch, in JD
         print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
         print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
         print("epoch                       : {:11.6f} JD".format(self.t0))
+
+    def state_when(self):
+        """Return state vector(s) at given time since epoch, in second.
+"""
+        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
+        nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
+        return self.state(nu)
+
+class Trajectory(Orbit):
+    def __init__(self, a, ecc, inc, Ome, ome, nu_ends, nu0=0., t0=0., mu=1.):
+        """Construct an elliptical trajectory by elements and extra parameters.
+
+Arguments:
+a       - semi-major axis
+ecc     - eccentricity
+inc     - inclination, in rad
+Ome     - longitude of ascending node, in rad
+ome     - argument of periapsis, in rad
+nu_ends - true anomalies of the two endpoints of the trajectory, in (nu_start, nu_stop)
+nu0     - true anomaly at epoch, in rad
+t0      - epoch
+mu      - standard gravitational parameter
+"""
+        super(Trajectory, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=mu)
+        self.nu_start, self.nu_stop = np.mod(nu_ends, 2.*np.pi)
+    def pprint(self):
+        super(Trajectory, self).pprint()
+        print("true anomaly at start       : {:11.6f} deg".format(np.rad2deg(self.nu_start)))
+        print("true anomaly at stop        : {:11.6f} deg".format(np.rad2deg(self.nu_stop)))
+    def allstates(self, N=100):
+        """Return equi-angular-distant state vectors from nu_start to nu_stop.
+"""
+        if self.nu_stop > self.nu_start:
+            nu = np.arange(N)/(N-1.)*(self.nu_stop-self.nu_start)+self.nu_start
+        else:
+            nu = np.arange(N)/(N-1.)*(2.*np.pi+self.nu_stop-self.nu_start)+self.nu_start
+        r, v = self.state(nu)
+        return r, v
+    def reverse(self):
+        """Reverse the direction of the underlying orbit of the trajectory, i.e.,
+the counter part of the current trajectory that makes a whole elliptical orbit
+together with the current trajectory.
+"""
+        super(Trajectory, self).reverse()
+        self.nu_start = np.mod(-self.nu_start, 2.*np.pi)
+        self.nu_stop  = np.mod(-self.nu_stop,  2.*np.pi)
+class RocketTrajectory(Trajectory):
+    def __init__(self, a, ecc, inc, Ome, ome, nu_ends, nu0=0., t0=0.):
+        """Construct an elliptical trajectory for a rocket launched from the Earth.
+
+Arguments:
+a       - semi-major axis, in km
+ecc     - eccentricity
+inc     - inclination, in rad
+Ome     - longitude of ascending node, in rad
+ome     - argument of perigee, in rad
+nu_ends - true anomalies of the two endpoints of the trajectory, in (nu_start, nu_stop)
+nu0     - true anomaly at epoch, in rad
+t0      - epoch, in JD
+"""
+        super(RocketTrajectory, self).__init__(a, ecc, inc, Ome, ome, nu_ends, nu0=nu0, t0=t0, mu=mu_SI['earth'])
+    def pprint(self):
+        """Print with pretty format.
+"""
+        print("semi-major axis             : {:15.6E} km".format(self.a))
+        print("eccentricity                : {:11.6f}".format(self.ecc))
+        print("inclination                 : {:11.6f} deg".format(np.rad2deg(self.inc)))
+        print("longitude of ascending node : {:11.6f} deg".format(np.rad2deg(self.Ome)))
+        print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
+        print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
+        print("epoch                       : {:11.6f} JD".format(self.t0))
+        print("true anomaly at start       : {:11.6f} deg".format(np.rad2deg(self.nu_start)))
+        print("true anomaly at stop        : {:11.6f} deg".format(np.rad2deg(self.nu_stop)))
     def state_when(self, t):
         """Return state vector(s) at given time since epoch, in second.
 """
         M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
-class Trajectory(Orbit):
-    def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi):
-        """Construct an elliptical trajectory by elements and extra parameters.
-Standard orbital elements:
-a   - semi-major axis
-ecc - eccentricity
-inc - inclination
-Ome - longitude of ascending node
-ome - argument of periapsis
-nu  - current true anomaly
-Extra parameters:
-nu_start    - true anomaly at start of the trajectory
-nu_stop     - true anomaly at stop of the trajectory
-nu_midpoint - true anomaly at midpoint of the trajectory
-"""
-        super(Trajectory, self).__init__(a, ecc, inc, Ome, ome, nu)
-        self.nu_start    = np.mod(nu_start,    2.*np.pi)
-        self.nu_stop     = np.mod(nu_stop,     2.*np.pi)
-        self.nu_midpoint = np.mod(nu_midpoint, 2.*np.pi)
-        if self.nu_stop > self.nu_start:
-            if self.nu_midpoint > self.nu_start and self.nu_midpoint < self.nu_stop:
-                self.prograde = True
-            else:
-                self.prograde = False
-        else:
-            if self.nu_midpoint < self.nu_start and self.nu_midpoint > self.nu_stop:
-                self.prograde = False
-            else:
-                self.prograde = True
-    def pprint(self):
-        super(Trajectory, self).pprint()
-        print("from {:f} deg to {:f} deg, via {:f} deg".format(
-            np.rad2deg(self.nu_start),
-            np.rad2deg(self.nu_stop),
-            np.rad2deg(self.nu_midpoint)
-        ))
-    def allstates(self, N=100):
-        """Return equi-angular-distant state vectors from nu_start to nu_stop.
-"""
-        if self.prograde:
-            if self.nu_stop > self.nu_start:
-                nu = np.arange(N)/(N-1.)*(self.nu_stop-self.nu_start)+self.nu_start
-            else:
-                nu = np.arange(N)/(N-1.)*(self.nu_stop+2.*np.pi-self.nu_start)+self.nu_start
-        else:
-            if self.nu_stop < self.nu_start:
-                nu = np.arange(N)/(N-1.)*(self.nu_stop-self.nu_start)+self.nu_start
-            else:
-                nu = np.arange(N)/(N-1.)*(self.nu_stop-2.*np.pi-self.nu_start)+self.nu_start
-        r, v = self.state(nu)
-        return r, v
-class RocketTrajectory(Trajectory):
-    def __init__(self, a, ecc, inc, Ome, ome, nu):
-        pass
+
 def find_trajectory_mindv(orb1, orb2, mu, N=10):
     """Find the trajectory between two orbits with minimum transfer delta-v.
 Global optimization is used, which could be considerably slow.
@@ -400,7 +427,7 @@ N is the number of samples where delta_v is evaluated before fine optimization.
             nu_mid = .5*(nu1+nu2)
         else:
             nu_mid = np.mod(.5*(nu1+nu2)+np.pi, 2.*np.pi)
-    traj = Trajectory(a, ecc, inc, Ome, ome, nu1, nu1, nu2, nu_mid)
+    traj = Trajectory(a, ecc, inc, Ome, ome, (nu1, nu2))
     opts = {
         'dv_entry'           : dv1,
         'dv_exit'            : dv2,
