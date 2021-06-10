@@ -184,7 +184,7 @@ t0  - epoch, in JD
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 class Trajectory(Orbit):
-    def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi, nu_midpoint=np.pi):
+    def __init__(self, a, ecc, inc, Ome, ome, nu, nu_start=0., nu_stop=2.*np.pi):
         """Construct an elliptical trajectory by elements and extra parameters.
 Standard orbital elements:
 a   - semi-major axis
