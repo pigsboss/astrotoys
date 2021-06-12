@@ -62,6 +62,15 @@ mu  - standard gravitational parameter (default: 1.)
         print("argument of periapsis       : {:11.6f} deg".format(np.rad2deg(self.ome)))
         print("true anomaly at epoch       : {:11.6f} deg".format(np.rad2deg(self.nu0)))
         print("epoch                       : {:11.6f}".format(self.t0))
+    def momentum(self):
+        """Return orbital momentum vector.
+"""
+        r, v = self.state(0.)
+        return np.cross(r, v)
+    def energy(self):
+        """Return specific orbital energy.
+"""
+        return -self.mu/2./self.a
     def state(self, nu):
         """Return state vector on given true anomaly.
 """
