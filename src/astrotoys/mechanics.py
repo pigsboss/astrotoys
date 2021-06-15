@@ -43,6 +43,7 @@ mu  - standard gravitational parameter (default: 1.)
       2. mu is in unit of G * earth_mass and the semi-major axis
          is in unit GSO radius, time is in unit of sidereal day.
 """
+        assert np.isfinite(a)
         self.a   = a
         self.ecc = ecc
         self.inc = inc
