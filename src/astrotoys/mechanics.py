@@ -8,6 +8,7 @@ from scipy.optimize import minimize_scalar, minimize, basinhopping, shgo, dual_a
 import pymath.quaternion as quaternion
 from multiprocessing import Pool
 
+
 AU_to_km = 149597871.0
 # standard gravitational_parameters of selected bodies, in m^3/s^2.
 mu_SI = {
@@ -118,7 +119,7 @@ mu  - standard gravitational parameter (default: 1.)
             ne.evaluate('mxx*vx+mxy*vy'),
             ne.evaluate('myx*vx+myy*vy'),
             ne.evaluate('mzx*vx+mzy*vy')
-        ])
+        ])*np.sqrt(self.mu)
         return r, v
     def allstates(self, N=100):
         """Return equi-angular-distant state vectors (r, v)
@@ -273,6 +274,66 @@ t0      - epoch, in JD
         M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
+
+def goid(rho, t, R, mu=mu_SI['earth']/1e9, d=1e3):
+    """Gauss method for orbit initial determination.
+
+rho - direction cosine unit vectors, i.e.,
+      rho[i,0] = cos RA[i] * cos Dec[i],
+      rho[i,1] = sin RA[i] * cos Dec[i],
+      rho[i,2] = sin Dec[i],
+      where RA and Dec are respective right ascension and declination.
+t   - time stamps for each observations.
+R   - observer's locations, in equatorial coordinate.
+mu  - standaard gravitational parameter of the central body.
+d   - initial guess of the distance between the orbiting body and the central body at t[1].
+
+Returns:
+r   - orbiting body's position at t[1], in equatorial coordinate
+v   - orbiting body's velocity at t[1], in equatorial coordinate
+"""
+    tau  = t[2] - t[0]
+    tau0 = t[0] - t[1]
+    tau2 = t[2] - t[1]
+    p0   = np.cross(rho[1], rho[2], axis=0)
+    p1   = np.cross(rho[0], rho[2], axis=0)
+    p2   = np.cross(rho[0], rho[1], axis=0)
+    D0   = np.sum(rho[0] * np.cross(rho[1], rho[2], axis=0), axis=0)
+    D00  = np.sum(R[0] * p0, axis=0)
+    D01  = np.sum(R[0] * p1, axis=0)
+    D02  = np.sum(R[0] * p2, axis=0)
+    D10  = np.sum(R[1] * p0, axis=0)
+    D11  = np.sum(R[1] * p1, axis=0)
+    D12  = np.sum(R[1] * p2, axis=0)
+    D20  = np.sum(R[2] * p0, axis=0)
+    D21  = np.sum(R[2] * p1, axis=0)
+    D22  = np.sum(R[2] * p2, axis=0)
+    A    = 1./D0*(-D01*tau2/tau + D11 + D21*tau0/tau)
+    B    = 1./6./D0*(D01*(tau2**2. - tau**2.)*tau2/tau + D21*(tau**2. - tau0**2.)*tau0/tau)
+    E    = np.sum(R[1] * rho[1], axis=0)
+    R12  = np.sum(R[1] * R[1], axis=0)
+    a    = -(A**2. + 2.*A*E + R12)
+    b    = -2. * mu * B * (A+E)
+    c    = -mu**2. * B**2.
+    tt   = 0
+    while tt<100:
+        res = (d**8. + a*d**6. + b*d**3. + c) / (8.*d**7. + 6.*a*d**5. + 3.*b*d**2.)
+        d   = d - res
+        if np.all(np.abs(res)<1e-9):
+            break
+        tt += 1
+    rho0 = ((6.*(D20*tau0/tau2 + D10*tau/tau2)*d**3. + mu*D20*(tau**2. - tau0**2.)*tau0/tau2)/(6.*d**3. + mu*(tau**2. - tau2**2.)) - D00)/D0
+    rho1 = A + mu*B/d**3.
+    rho2 = ((6.*(D02*tau2/tau0 - D12*tau/tau0)*d**3. + mu*D02*(tau**2. - tau2**2.)*tau2/tau0)/(6.*d**3. + mu*(tau**2. - tau0**2.)) - D22)/D0
+    r0   = R[0] + rho0*rho[0]
+    r1   = R[1] + rho1*rho[1]
+    r2   = R[2] + rho2*rho[2]
+    f0   = 1. - .5*mu*tau0**2./d**3.
+    f2   = 1. - .5*mu*tau2**2./d**3.
+    g0   = tau0 - mu*tau0**3./d**3./6.
+    g2   = tau2 - mu*tau2**3./d**3./6.
+    v1   = (-f2*r0 + f0*r2) / (f0*g2 - f2*g0)
+    return r1, v1
 
 def find_trajectory_mindv(orb1, orb2, mu, N=10):
     """Find the trajectory between two orbits with minimum transfer delta-v.
