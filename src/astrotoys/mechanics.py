@@ -275,6 +275,27 @@ t0      - epoch, in JD
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 
+def goidm(u, t, R, mu=mu_SI['earth']/1e9, max_iterations=100):
+    """Gauss method for orbit initial determination with multiple observations (more than 3).
+
+u   - direction cosine unit vectors
+t   - time stamps
+R   - observer's coordinates
+mu  - standard gravitational parameter of the central body
+
+Return
+r, v - orbit state vectors
+"""
+    nobs = len(t)
+    H    = np.zeros((3*(nobs-2), nobs), dtype='double')
+    rho  = np.zeros((nobs      ,    1), dtype='double')
+    xi   = np.zeros((3*(nobs-2),    1), dtype='double')
+    l    = 0
+    while l<max_iterations:
+        ## TODO
+        l += 1
+    return r, v
+    
 def goid(rho, t, R, mu=mu_SI['earth']/1e9, d=1e3):
     """Gauss method for orbit initial determination.
 
