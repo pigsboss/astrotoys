@@ -285,16 +285,33 @@ mu  - standard gravitational parameter of the central body
 
 Return
 r, v - orbit state vectors
+
+Reference:
+
 """
-    nobs = len(t)
-    H    = np.zeros((3*(nobs-2), nobs), dtype='double')
-    rho  = np.zeros((nobs      ,    1), dtype='double')
-    xi   = np.zeros((3*(nobs-2),    1), dtype='double')
-    l    = 0
+    nobs  = len(t)
+    Rmag2 = np.sum(R**2., axis=0)
+    H     = np.zeros((3*(nobs-2), nobs), dtype='double')
+    rho   = np.zeros((nobs      ,    1), dtype='double')
+    x     = np.zeros((3*(nobs-2),    1), dtype='double')
+    dt    = np.diff(t)
+    l     = 0
     while l<max_iterations:
-        ## TODO
-        l += 1
-    return r, v
+        rmag = (rho.ravel()**2. + 2.*rho.ravel()*np.sum(u*R, axis=0) + Rmag2)**.5
+        c    = dt[1:]/(dt[:-1]+dt[1:])*(1.+mu*((dt[:-1]+dt[1:])**2.-dt[1:  ]**2.)/6./rmag[1:-1]**3.)
+        d    = dt[1:]/(dt[:-1]+dt[1:])*(1.+mu*((dt[:-1]+dt[1:])**2.-dt[ :-1]**2.)/6./rmag[1:-1]**3.)
+        for i in range(nobs-2):
+            H[3*i:3*(i+1), i  ] = c[i]*u[:,i  ]
+            H[3*i:3*(i+1), i+1] =     -u[:,i+1]
+            H[3*i:3*(i+1), i+2] = d[i]*u[:,i+2]
+            x[3*i:3*(i+1), 0  ] = R[:,i+1] - c[i]*R[:,i] - d[i]*R[:,i+2]
+        Ht   = np.transpose(H)
+        HtH  = np.matmul(Ht,H)
+        rhon = np.matmul(np.linalg.inv(HtH), np.matmul(Ht, x))
+        rho  = rhon
+        l   += 1
+    r = rho.reshape((1, nobs))*u + R
+    return r, rho
     
 def goid(rho, t, R, mu=mu_SI['earth']/1e9, d=1e3):
     """Gauss method for orbit initial determination.
