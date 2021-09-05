@@ -130,7 +130,7 @@ from nu=0 to nu=2*PI on the orbit.
     def state_when(self, t):
         """Return state vector(s) at given time.
 """
-        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)
+        M  = np.mod(self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0), 2.*np.pi)
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
     def reverse(self):
@@ -170,7 +170,7 @@ t0  - epoch, in JD
     def state_when(self, t):
         """Return state vector(s) at given time, in JD.
 """
-        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)
+        M  = np.mod(self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0), 2.*np.pi)
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 class SatelliteOrbit(Orbit):
@@ -201,7 +201,7 @@ t0  - epoch, in JD
     def state_when(self, t):
         """Return state vector(s) at given time since epoch, in second.
 """
-        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
+        M  = np.mod(self.M0 + np.sqrt(self.mu/self.a**3.)*t, 2.*np.pi)
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 
@@ -273,7 +273,7 @@ t0      - epoch, in JD
     def state_when(self, t):
         """Return state vector(s) at given time since epoch, in second.
 """
-        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*t
+        M  = np.mod(self.M0 + np.sqrt(self.mu/self.a**3.)*t, 2.*np.pi)
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 
