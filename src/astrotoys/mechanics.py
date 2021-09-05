@@ -154,7 +154,9 @@ ome - argument of perihelion, in rad
 nu0 - true anomaly at epoch, in rad
 t0  - epoch, in JD
 """
-        super(PlanetOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=1.)
+        super(PlanetOrbit, self).__init__(
+            a, ecc, inc, Ome, ome, nu0=nu0, t0=t0,
+            mu=mu_SI['sun'] / (AU_to_km*1e3)**3. * (86400.**2.))
     def pprint(self):
         """Print with pretty format.
 """
@@ -168,7 +170,7 @@ t0  - epoch, in JD
     def state_when(self, t):
         """Return state vector(s) at given time, in JD.
 """
-        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)/365.25
+        M  = self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0)
         nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
         return self.state(nu)
 class SatelliteOrbit(Orbit):

@@ -1,4 +1,4 @@
-"""Helpers for various astronomical data products.
+"""Helpers for various astronomical & astronautical data products.
 """
 
 import numpy as np
@@ -107,6 +107,7 @@ gdr2_csv_dtype = np.dtype([
     ('lum_percentile_lower',              'f4'),
     ('lum_percentile_upper',              'f4')
 ])
+
 gdr2_csv_dtype_unicode = np.dtype([
     ('solution_id',                       'i8'),
     ('designation',                       'U30'),

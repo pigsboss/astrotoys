@@ -554,6 +554,7 @@ Correct *only the precession effect* between J2000 equatorial
 coordinates and the instantaneous equatorial coordinates.
 The returned precession matrix should be left-multiplied to
 the J2000 equatorial coordinates directly.
+(IAU 1976 Precession model)
 
 Input:
 UTC is UTC time in Julian days.
@@ -562,11 +563,11 @@ Reference:
 http://www.navipedia.net/index.php/ICRF_to_CEP
 http://en.wikipedia.org/wiki/Barycentric_Dynamical_Time
 """
-    TDB=utc2tdb(UTC)
-    T=(TDB-2451545.0)/36525.0
-    z =     np.deg2rad((2306.2181*T+1.09468*(T**2.0)+0.018203*(T**3.0))/3600.0)
+    TDB   = utc2tdb(UTC)
+    T     = (TDB-2451545.0)/36525.0
+    z     = np.deg2rad((2306.2181*T+1.09468*(T**2.0)+0.018203*(T**3.0))/3600.0)
     theta = np.deg2rad((2004.3109*T-0.42665*(T**2.0)-0.041833*(T**3.0))/3600.0)
-    zeta =  np.deg2rad((2306.2181*T+0.30188*(T**2.0)+0.017998*(T**3.0))/3600.0)
+    zeta  = np.deg2rad((2306.2181*T+0.30188*(T**2.0)+0.017998*(T**3.0))/3600.0)
     P = np.matrix([\
         [np.cos(z)*np.cos(theta)*np.cos(zeta)-np.sin(z)*np.sin(zeta),\
         -np.cos(z)*np.cos(theta)*np.sin(zeta)-np.sin(z)*np.cos(zeta),\
@@ -618,12 +619,13 @@ def gmst(UTC):
     """Greenwich mean sidereal time (in degrees) at given time.
 
 Input:
-UTC is UTC time in Julian days.
+UTC - UTC time in Julian days.
 """
-    UTC = np.array(UTC)
-    JD=UTC+dut1(UTC)/86400.0
-    JDmin=np.floor(JD)-0.5
-    JDmax=np.floor(JD)+0.5
+    UTC   = np.array(UTC)
+    # JD    = UTC+dut1(UTC)/86400.0
+    JD    = UTC
+    JDmin = np.floor(JD)-0.5
+    JDmax = np.floor(JD)+0.5
     try:
         JD0 = np.empty(UTC.shape)
         JD0[JD>=JDmin] = JDmin[JD>=JDmin]
@@ -633,8 +635,8 @@ UTC is UTC time in Julian days.
             JD0=JDmin
         if JD>=JDmax:
             JD0=JDmax
-    H=(JD-JD0)*360.0
-    T=(JD0-2451545.0)/36525.0
+    H = (JD-JD0)*360.0
+    T = (JD0-2451545.0)/36525.0
     return np.mod(1.002737909350795*H+\
         (6.0+41.0/60.0+50.54841/3600.0)*15.0+\
         (8640184.812866*T+0.093104*(T**2.0)-6.21*(T**3.0))/3600.0*15.0,360.0)
@@ -731,13 +733,20 @@ lon and lat are geographic coordinates.
 def equ2geo(UTC,ra,dec):
     """Convert equatorial coordinates to geodetic coordinates at given time.
 
+UTC - UTC time in JD
+ra  - R.A., in rad
+dec - Dec., in rad
+
+Returns:
+lon - geodetic longitude, in rad
+lat - geodetic latitude, in rad
 """
-    P=precession_matrix(UTC)
-    N=nutation_matrix(UTC)
-    S=sidereal_matrix(UTC)
-    requ=ptr2xyz(ra,dec)
-    rgeo=np.ravel(S*N*P*np.matrix(requ).reshape((3,1)))
-    lon,lat,_=xyz2ptr(*tuple(rgeo))
+    P         = precession_matrix(UTC)
+    N         = nutation_matrix(UTC)
+    S         = sidereal_matrix(UTC)
+    requ      = ptr2xyz(ra,dec)
+    rgeo      = np.ravel(S*N*P*np.matrix(requ).reshape((3,1)))
+    lon,lat,_ = xyz2ptr(*tuple(rgeo))
     return lon,lat
 
 def geo2equ(UTC,lon,lat):
@@ -750,13 +759,14 @@ Returns:
 ra  - right ascension, in rad
 dec - declination, in rad
 """
-    P = precession_matrix(UTC)
-    N = nutation_matrix(UTC)
-    S = sidereal_matrix(UTC)
-    rgeo = ptr2xyz(lon, lat)
-    requ = np.ravel(np.linalg.inv(P)*np.linalg.inv(N)*np.linalg.inv(S)*np.matrix(rgeo).reshape((3,1)))
+    P          = precession_matrix(UTC)
+    N          = nutation_matrix(UTC)
+    S          = sidereal_matrix(UTC)
+    rgeo       = ptr2xyz(lon, lat)
+    requ       = np.ravel(np.linalg.inv(P)*np.linalg.inv(N)*np.linalg.inv(S)*np.matrix(rgeo).reshape((3,1)))
     ra, dec, _ = xyz2ptr(*tuple(requ))
     return ra, dec
+
 def equ2geo_quat(UTC,ra,dec):
     """Convert equatorial coordinate to geodetic coordinate.
 
