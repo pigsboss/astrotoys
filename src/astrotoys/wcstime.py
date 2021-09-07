@@ -745,7 +745,8 @@ lat - geodetic latitude, in rad
     N         = nutation_matrix(UTC)
     S         = sidereal_matrix(UTC)
     requ      = ptr2xyz(ra,dec)
-    rgeo      = np.ravel(S*N*P*np.matrix(requ).reshape((3,1)))
+    qgeo      = quaternion.from_matrix(S*N*P)
+    rgeo      = quaternion.rotate(qgeo, requ)
     lon,lat,_ = xyz2ptr(*tuple(rgeo))
     return lon,lat
 
@@ -763,24 +764,10 @@ dec - declination, in rad
     N          = nutation_matrix(UTC)
     S          = sidereal_matrix(UTC)
     rgeo       = ptr2xyz(lon, lat)
-    requ       = np.ravel(np.linalg.inv(P)*np.linalg.inv(N)*np.linalg.inv(S)*np.matrix(rgeo).reshape((3,1)))
+    qequ       = quaternion.from_matrix(np.linalg.inv(S*N*P))
+    requ       = quaternion.rotate(qequ, rgeo)
     ra, dec, _ = xyz2ptr(*tuple(requ))
     return ra, dec
-
-def equ2geo_quat(UTC,ra,dec):
-    """Convert equatorial coordinate to geodetic coordinate.
-
-Takes both precession and nutation into account.
-"""
-    requ = ptr2xyz(ra,dec)
-    qP = precession_quaternion(UTC)
-    qN = nutation_quaternion(UTC)
-    alphaE=np.arctan2(2.0*(qN[1]*qN[2]-qN[0]*qN[3]),qN[0]**2.0+qN[1]**2.0-qN[2]**2.0-qN[3]**2.0)
-    ThetaG=alphaE + np.deg2rad(gmst(UTC))
-    qS = np.array([np.cos(ThetaG*0.5),0.0,0.0,-np.sin(ThetaG*0.5)])
-    rgeo = quaternion.rotate(qS,quaternion.rotate(qN,quaternion.rotate(qP,requ)))
-    lon,lat,_=xyz2ptr(*tuple(rgeo))
-    return lon,lat
 
 def equ2geo_fast(UTC,ra,dec):
     """Convert equatorial coordinate to geodetic coordinate.
