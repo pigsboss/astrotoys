@@ -467,8 +467,8 @@ class SphericalRectangle(SphericalPolygon):
         """Find if p is inside the rectangle.
 """
         pref = quaternion.rotate(quaternion.conjugate(self.quat), p)
-        return (np.abs(pref[1]) <= np.abs(self.size_v*0.5*pref[0])) & \
-               (np.abs(pref[2]) <= np.abs(self.size_u*0.5*pref[0])) & \
+        return (np.abs(pref[1]) <= np.abs(self.size_u*0.5*pref[0])) & \
+               (np.abs(pref[2]) <= np.abs(self.size_v*0.5*pref[0])) & \
                (pref[0]>0)
 
     def inside_hpx(self, nside):
@@ -574,9 +574,9 @@ to its intrinsic coordinate system.
             px_sz_v = px_sz[0]
             span_u  = span[1]
             span_v  = span[0]
-        ygv = (np.double(range(0,NU))-(np.double(NU)-1.0)*0.5)/ \
+        ygv = (np.arange(NU)-(np.double(NU)-1.0)*0.5)/ \
             np.double(NU) * au
-        zgv = (np.double(range(0,NV))-(np.double(NV)-1.0)*0.5)/ \
+        zgv = (np.arange(NV)-(np.double(NV)-1.0)*0.5)/ \
             np.double(NV) * av
         y,z = np.meshgrid(ygv,zgv)
         xyz = quaternion.rotate(quat = quat, \

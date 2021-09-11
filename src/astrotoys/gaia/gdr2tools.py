@@ -38,6 +38,7 @@ import os
 import gzip
 import colorsys
 import astrotoys.observer.humanvision as hv
+from astrotoys.photometry import gmag2photrate
 from time import time
 from multiprocessing import Pool, Queue, Process, cpu_count
 from os import path
@@ -45,7 +46,7 @@ from subprocess import run, PIPE
 from getopt import gnu_getopt
 from astropy.io import fits
 from pymath.quaternion import fit_attitude, conjugate, ptr2xyz, rotate
-from astrotoys.p3g.pixelgrid import SphericalRectangle
+from astrotoys.p3g.pixelgrid import SphericalRectangle, PixelGrid
 from astrotoys.p3g.skymap import SkyMap, SkyMapList, parse_angle
 from astrotoys.formats import gdr2_csv_dtype, gdr2_source_meta_dtype
 from astrotoys.wcstime import convert_csys
@@ -114,6 +115,7 @@ class HPXLocator:
 class HumanVision:
     def __init__(self, method='cubic', CMF='10deg'):
         self.observer = hv.CIEObserver(method=method, CMF=CMF)
+        self.pixfmt   = np.dtype([('r', 'f8'), ('g', 'f8'), ('b', 'f8')])
     def __call__(self, gdr2src):
         coef = self.observer.K_to_rgb(np.nan_to_num(gdr2src['teff_val'], nan=DEFAULT_TEFF_VAL))
         pixv = np.empty(gdr2src.size, dtype=hv.pixfmt)
@@ -121,6 +123,20 @@ class HumanVision:
         pixv['g'] = gdr2src['phot_g_mean_flux']*coef[1]
         pixv['b'] = gdr2src['phot_g_mean_flux']*coef[2]
         return pixv
+
+class BandpassFlux:
+    def __init__(self, band='g'):
+        if band.lower()=='g':
+            self.bandfield='phot_g_mean_mag'
+        elif band.lower()=='r':
+            self.bandfield='phot_rp_mean_mag'
+        elif band.lower()=='b':
+            self.bandfield='phot_bp_mean_mag'
+        else:
+            raise TypeError('unsupported band {}.'.format(band))
+        self.pixfmt = np.dtype([('flux', 'f8')])
+    def __call__(self, gdr2src):
+        return gmag2photrate(gdr2src[self.bandfield]).astype(self.pixfmt)
 
 def __sources_inside__(meta, level, rect):
     """Check if source file contains GDR2 sources inside specified spherical rectangle.
@@ -182,44 +198,55 @@ def make_spherical_rectangle(quat, span):
     ]))
 
 def make_map_p3g(src, quat, span, N, csys, pixel_response, threads):
-    cursrc = src.find_source_files_in_spherical_rectangle(quat, span)
-    print(u'{} source files found.'.format(cursrc.size))
-    q_npy = Queue()
-    q_sta = Queue()
-    q_map = Queue()
-    workers = []
     pixel_locator = P3GLocator(quat, span, N, csys)
-    for i in range(threads):
-        proc = Process(target=__count_sources__, args=(q_npy, q_map, pixel_locator, pixel_response))
-        proc.start()
-        workers.append(proc)
-    packs = list(cursrc['filename'])+[None]*threads
-    feeder = Process(target=__queue_put__, args=(packs, q_npy))
-    feeder.start()
-    print('Processing source files......')
-    t = 0
-    tic = time()
-    while t<cursrc.size:
-        stat = q_sta.get()
-        sys.stdout.write(u'  \r{}/{} ({:.1f}%): {} processed.'.format(t+1, cursrc.size, 100.0*(t+1)/cursrc.size, stat))
-        sys.stdout.flush()
-        t+=1
-    print('\nProcessing source files......Finished ({.1f} seconds).'.format(time()-tic))
-    cdata = np.zeros(pixel_locator.shape, dtype=pixel_response.pixfmt)
-    print('Collecting results from parallel workers......')
-    for i in range(threads):
-        if cdata.dtype.fields is None:
-            cdata += q_map.get()
+    if path.isdir(src.source):
+        cursrc = src.find_source_files_in_spherical_rectangle(quat, span)
+        print(u'{} source files found.'.format(cursrc.size))
+        q_npy = Queue()
+        q_sta = Queue()
+        q_map = Queue()
+        workers = []
+        for i in range(threads):
+            proc = Process(target=__count_sources__, args=(q_npy, q_map, pixel_locator, pixel_response))
+            proc.start()
+            workers.append(proc)
+        packs = list(cursrc['filename'])+[None]*threads
+        feeder = Process(target=__queue_put__, args=(packs, q_npy))
+        feeder.start()
+        print('Processing source files......')
+        t = 0
+        tic = time()
+        while t<cursrc.size:
+            stat = q_sta.get()
+            sys.stdout.write(u'  \r{}/{} ({:.1f}%): {} processed.'.format(t+1, cursrc.size, 100.0*(t+1)/cursrc.size, stat))
+            sys.stdout.flush()
+            t+=1
+        print('\nProcessing source files......Finished ({.1f} seconds).'.format(time()-tic))
+        cdata = np.zeros(pixel_locator.shape, dtype=pixel_response.pixfmt)
+        print('Collecting results from parallel workers......')
+        for i in range(threads):
+            if cdata.dtype.fields is None:
+                cdata += q_map.get()
+            else:
+                cdata_new = q_map.get()
+                for field in cdata.dtype.fields:
+                    cdata[field] += cdata_new[field]
+            print('  Results retrieved from thread {}/{}.'.format(i+1, threads))
+        print('Collecting results from parallel workers......Finished.')
+        for p in workers:
+            p.join()
+        feeder.join()
+        print('All jobs done.')
+    else:
+        cdata   = np.zeros(pixel_locator.shape, dtype=pixel_response.pixfmt)
+        src_in  = src.find_sources_in_spherical_rectangle(quat, span)
+        pidx, inside = pixel_locator(np.deg2rad(src_in['ra']), np.deg2rad(src_in['dec']))
+        pixv = pixel_response(src_in[inside])
+        if pixv.dtype.fields is None:
+            cdata[:] = np.reshape(np.bincount(pidx, pixv, pixel_locator.size), pixel_locator.shape)
         else:
-            cdata_new = q_map.get()
-            for field in cdata.dtype.fields:
-                cdata[field] += cdata_new[field]
-        print('  Results retrieved from thread {}/{}.'.format(i+1, threads))
-    print('Collecting results from parallel workers......Finished.')
-    for p in workers:
-        p.join()
-    feeder.join()
-    print('All jobs done.')
+            for field in pixv.dtype.fields:
+                cdata[field][:] = np.reshape(np.bincount(pidx, pixv[field], pixel_locator.size), pixel_locator.shape)
     return cdata
 
 def make_map_hpx(src, nside, nest, csys, pixel_response, threads):
@@ -457,7 +484,7 @@ The following backend repositories are supported.
         else:
             raise StopIteration
 
-    def find_source_files_in_spherical_rectangle(self, quat, span):
+    def find_source_files_in_spherical_rectangle(self, quat, span, show_profiling=False):
         """Find source files that may possibly contain certain sources located in specified spherical rectangle.
 
 This function supports directories of .csv.gz files or .npy files as its backend repositories only.
@@ -479,7 +506,8 @@ Arguments:
                 ## mask = np.array(list(map(__sources_inside__, content, (level,)*content.size, (rect,)*content.size))) ## single thread
                 content = np.copy(content[mask])
                 level += 1
-        print(u'found {:d} source files in {:.2f} seconds.'.format(content.size, time()-tic))
+        if show_profiling:
+            print(u'found {:d} source files in {:.2f} seconds.'.format(content.size, time()-tic))
         return content
 
     def find_sources_in_healpix(self, pix, level):
@@ -514,6 +542,32 @@ Return:
         else:
             sources = self.content.read_where('(source_id>={:d}) & (source_id<{:d})'.format(sid_start, sid_stop))            
         return sources
+
+    def find_sources_in_spherical_rectangle(self, quat, span, show_profiling=True, show_progress=True):
+        """Find sources that locate in specified spherical rectangle.
+
+Arguments:
+  quat (quaternion) and span (angular size in height x width) define the spherical rectangle.
+"""
+        g = PixelGrid(quat=quat, span=span, N=4)
+        level = int(np.floor(np.log2((4.*np.pi/(4.*np.max(g.px_area))/12.)**.5)))
+        nside = 1<<level
+        x, y, z = np.concatenate((g.pixel_vertices()), axis=-1)
+        pixs  = np.unique(np.ravel(hp.vec2pix(nside, x, y, z, nest=HEALPIX_NEST)))
+        if path.isdir(self.source):
+            sources = np.zeros((0, ), dtype=gdr2_csv_dtype)
+        else:
+            sources = np.zeros((0, ), dtype=self.content.dtype)
+        tic = time()
+        for i in range(pixs.size):
+            if show_progress:
+                print('processing {:d}/{:d} HEALPIX pixel...'.format(i+1, pixs.size))
+            sources = np.concatenate((sources, self.find_sources_in_healpix(pixs[i], level)))
+        if show_profiling:
+            print(u'found {:d} sources in {:.2f} seconds.'.format(sources.size, time()-tic))
+        pxyz = ptr2xyz(np.deg2rad(sources['ra']), np.deg2rad(sources['dec']), 1.)
+        pinside = g.boundary.inside(pxyz)
+        return sources[pinside]
 
 def main():
     opts, args = gnu_getopt(
@@ -566,7 +620,7 @@ def main():
             except ValueError:
                 N = tuple(map(int, val.split(',')))
         elif opt in ['-q', '--quaternion']:
-            quat = list(map(float, val.split(',')))
+            quat = np.double(list(map(float, val.split(','))))
         elif opt in ['--span']:
             try:
                 span = (parse_angle(val),)*2
@@ -598,6 +652,9 @@ def main():
             resolstr = 'N{:d}'.format(N)
         if response == 'humanvision':
             pixel_response = HumanVision()
+        elif response.lower().startswith('flux'):
+            _, band = response.lower().split(':')
+            pixel_response = BandpassFlux(band)
         if pixelization.lower() == 'p3g':
             quat, axis, up, phi, theta, psi, _ = fit_attitude(quat, axis, up, phi, theta, psi)
             cdata = make_map_p3g(src, quat, span, N, csys, pixel_response, threads)
