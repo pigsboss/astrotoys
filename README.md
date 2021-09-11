@@ -1,2 +1,2 @@
-# astrotoys
-Astronomy related toys.
+# AstroToys
+Astronomy & astronautics related toys.
