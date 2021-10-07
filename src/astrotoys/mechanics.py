@@ -866,12 +866,16 @@ v - normalized velocity vector, in UNIT_OF_LENGTH / UNIT_OF_TIME / sqrt(standard
     return r, v
 
 def orbital_elements_to_rotation_matrix_inverse(Ome, inc, ome):
+    """Cosine matrix of transformation from geo/heliocentric equatorial/ecliptical frame to perifocal frame.
+"""
     return np.matrix([
         [-np.sin(Ome)*np.cos(inc)*np.sin(ome) + np.cos(Ome)*np.cos(ome),  np.cos(Ome)*np.cos(inc)*np.sin(ome) + np.sin(Ome)*np.cos(ome), np.sin(inc)*np.sin(ome)],
         [-np.sin(Ome)*np.cos(inc)*np.cos(ome) - np.cos(Ome)*np.sin(ome),  np.cos(Ome)*np.cos(inc)*np.cos(ome) - np.sin(Ome)*np.sin(ome), np.sin(inc)*np.cos(ome)],
         [                              np.sin(Ome)*np.sin(inc),                              -np.cos(Ome)*np.sin(inc),          np.cos(inc)]])
 
 def orbital_elements_to_rotation_matrix(Ome, inc, ome):
+    """Cosine matrix of transformation from perifocal frame to geo/heliocentric equatorial/ecliptical frame.
+"""
     return np.matrix([
         [-np.sin(Ome)*np.sin(ome)*np.cos(inc) + np.cos(Ome)*np.cos(ome), -np.sin(Ome)*np.cos(inc)*np.cos(ome) - np.sin(ome)*np.cos(Ome),  np.sin(Ome)*np.sin(inc)],
         [ np.sin(Ome)*np.cos(ome) + np.sin(ome)*np.cos(Ome)*np.cos(inc), -np.sin(Ome)*np.sin(ome) + np.cos(Ome)*np.cos(inc)*np.cos(ome), -np.sin(inc)*np.cos(Ome)],
