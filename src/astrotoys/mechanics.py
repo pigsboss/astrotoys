@@ -1204,3 +1204,24 @@ e is eccentricity.
         (0.75*e**2. + 0.125*e**4.)*np.sin(2.*f) - \
         1./3.*e**3.*np.sin(3.*f) + \
         5./32.*e**4.*np.sin(4.*f)
+
+def mean_anomaly_to_true_anomaly_test(decc=1e-1, N=1024, K=5, newton_max_loops=100, plot=True):
+    ecc = np.arange(0, 1, decc)
+    acc_newton = np.empty((ecc.size, K))
+    acc_series = np.empty((ecc.size, K))
+    for i in range(ecc.size):
+        f = np.random.rand(N, K)*2.*np.pi
+        M = true_anomaly_to_mean_anomaly(f, ecc[i])
+        E = eccentric_anomaly(M, ecc[i], max_loops=newton_max_loops)
+        f_newton = true_anomaly(E, ecc[i])
+        f_series = mean_anomaly_to_true_anomaly_series(M, ecc[i])
+        acc_newton[i,:] = np.std(((np.sin(f_newton)-np.sin(f))**2.+(np.cos(f_newton)-np.cos(f))**2.)**.5, axis=0)
+        acc_series[i,:] = np.std(((np.sin(f_series)-np.sin(f))**2.+(np.cos(f_series)-np.cos(f))**2.)**.5, axis=0)
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.errorbar(ecc, np.mean(acc_newton, axis=-1), np.max(acc_newton, axis=-1)-np.min(acc_newton, axis=-1), label='Newton')
+        plt.errorbar(ecc, np.mean(acc_series, axis=-1), np.max(acc_series, axis=-1)-np.min(acc_series, axis=-1), label='Series')
+        plt.xlabel('Eccentricity')
+        plt.ylabel('Accuracy')
+        plt.show()
+    return acc_newton, acc_series
