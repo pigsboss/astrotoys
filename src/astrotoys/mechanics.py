@@ -9,7 +9,7 @@ import pymath.quaternion as quaternion
 from multiprocessing import Pool
 
 
-AU_to_km = 149597871.0
+AU_to_km = 1.49597870700e8
 # standard gravitational_parameters of selected bodies, in m^3/s^2.
 mu_SI = {
     'sun'     : 1.32712440018e20,
