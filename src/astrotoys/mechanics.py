@@ -1172,27 +1172,27 @@ ecc is eccentricity.
     y = 0.5*(1+np.sign(1-ecc))*(b*np.sin(E))   + 0.5*(1-np.sign(1-ecc))*(b*np.sinh(E))
     return np.arctan2(y,x)
 
-def true_anomaly_to_mean_anomaly(f, e):
+def true_anomaly_to_mean_anomaly(f, ecc):
     """Compute mean anomaly from eccentricity and true anomaly.
 f is true anomaly, in rad.
 e is eccentricity.
 """
-    E = np.arctan2(np.sqrt(1. - e**2.)*np.sin(f), e + np.cos(f))
-    return E - e*np.sin(E)
+    E = np.arctan2(np.sqrt(1. - ecc**2.)*np.sin(f), ecc + np.cos(f))
+    return E - ecc*np.sin(E)
 
-def mean_anomaly_to_true_anomaly_series(M, e):
+def mean_anomaly_to_true_anomaly_series(M, ecc):
     """Compute true anomaly from eccentricity and mean anomaly with series expansion.
 M is mean anomaly in radian [0, 2pi).
 e is eccentricity.
 """
     return M + \
-        (2.*e - 0.25*e**3.)*np.sin(M) + \
-        1.25*e**2.*np.sin(2.*M) + \
-        13./12.*e**3.*np.sin(3.*M) + \
-        103./96.*e**4.*np.sin(4.*M) + \
-        1097./960.*e**5.*np.sin(5.*M) + \
-        1223./960.*e**6.*np.sin(6.*M) + \
-        47273./32256.*e**7.*np.sin(7.*M)
+        (2.*ecc - 0.25*ecc**3.)*np.sin(M) + \
+        1.25*ecc**2.*np.sin(2.*M) + \
+        13./12.*ecc**3.*np.sin(3.*M) + \
+        103./96.*ecc**4.*np.sin(4.*M) + \
+        1097./960.*ecc**5.*np.sin(5.*M) + \
+        1223./960.*ecc**6.*np.sin(6.*M) + \
+        47273./32256.*ecc**7.*np.sin(7.*M)
 
 def true_anomaly_to_mean_anomaly_series(f, e):
     """Compute mean anomaly from eccentricity and true anomaly with series expansion.
