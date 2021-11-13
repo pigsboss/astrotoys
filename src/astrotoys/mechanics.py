@@ -1161,12 +1161,11 @@ The eccentric anomaly E is calculated by solving the following equation
 with Newton's method:
 M = E - ecc * sin(E)
 """
-    M, ecc, d = map(np.copy, np.broadcast_arrays(M, ecc, np.pi))
-    solved = np.zeros(M.shape, dtype='bool')
     if init is None:
-        E = np.copy(M)
-    else:
-        E = init
+        init = np.copy(M)
+    M, ecc, d, init = map(np.copy, np.broadcast_arrays(M, ecc, np.pi, init))
+    solved = np.zeros(M.shape, dtype='bool')
+    E = init
     t = 0
     while True:
         d[~solved] = ne.evaluate(
