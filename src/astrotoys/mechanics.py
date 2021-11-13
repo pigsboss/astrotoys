@@ -4,6 +4,8 @@
 
 import numpy as np
 import numexpr as ne
+import sys
+import warnings
 from scipy.optimize import minimize_scalar, minimize, basinhopping, shgo, dual_annealing
 import pymath.quaternion as quaternion
 from multiprocessing import Pool
@@ -1118,6 +1120,15 @@ a    - half of semi-latus rectum for parabolic orbit, in AU.
     y   = rho*np.sin(nu)
     return x,y,rho,nu
 
+class KeplerError(RuntimeError):
+    def __init__(self, M=None, ecc=None, E=None, solved=None,loops=None):
+        self.M=M
+        self.ecc=ecc
+        self.E=E
+        self.solved=solved
+        self.loops=loops
+        super().__init__('max_loops reachded.')
+
 def hyperbolic_anomaly(M, ecc, max_loops=100):
     """Calculate hyperbolic anomaly from mean anomaly and eccentricity.
 
@@ -1133,13 +1144,13 @@ M = ecc * sinh(H) - H
     t  = 0
     d  = np.pi
     while t < max_loops and not np.allclose(d, 0.):
-        Hn = np.arcsinh((H+M)/ecc)
+        Hn = ne('arcsinh((H+M)/ecc')
         d  = Hn - H
         H  = Hn
         t += 1
     return H
 
-def eccentric_anomaly(M, ecc, max_loops=100):
+def eccentric_anomaly(M, ecc, init=None, max_loops=100, tol=1e-10):
     """Calculate eccentric anomaly from mean anomaly and eccentricity.
 
 M         is mean anomaly.
@@ -1150,13 +1161,30 @@ The eccentric anomaly E is calculated by solving the following equation
 with Newton's method:
 M = E - ecc * sin(E)
 """
-    E = M
+    M, ecc, d = map(np.copy, np.broadcast_arrays(M, ecc, np.pi))
+    solved = np.zeros(M.shape, dtype='bool')
+    if init is None:
+        E = np.copy(M)
+    else:
+        E = init
     t = 0
-    d = np.pi
-    while t < max_loops and not np.allclose(d, 0.):
-        d  = (E - ecc*np.sin(E) - M) / (1.0 - ecc*np.cos(E))
-        E  = E - d
-        t += 1
+    while True:
+        d[~solved] = ne.evaluate(
+            '(E-ecc*sin(E)-M)/(1.0-ecc*cos(E))',
+            local_dict={'E':E[~solved], 'ecc':ecc[~solved], 'M':M[~solved]})
+        solved = np.isclose(d, 0.0, atol=tol)
+        if np.all(solved):
+            break
+        else:
+            if t>=max_loops:
+                raise KeplerError(
+                    M=M,
+                    ecc=ecc,
+                    E=E,
+                    solved=solved,
+                    loops=t)
+            E[~solved] = E[~solved]-d[~solved]
+            t = t+1
     return E
 
 def true_anomaly(E, ecc):
@@ -1168,8 +1196,8 @@ ecc is eccentricity.
     a = np.sign(1-ecc)
     c = a*ecc
     b = np.abs(1.0 - ecc**2.0)**0.5
-    x = 0.5*(1+np.sign(1-ecc))*(a*np.cos(E)-c) + 0.5*(1-np.sign(1-ecc))*(a*np.cosh(E)-c)
-    y = 0.5*(1+np.sign(1-ecc))*(b*np.sin(E))   + 0.5*(1-np.sign(1-ecc))*(b*np.sinh(E))
+    x = 0.5*(1+a)*(a*np.cos(E)-c) + 0.5*(1-a)*(a*np.cosh(E)-c)
+    y = 0.5*(1+a)*(b*np.sin(E))   + 0.5*(1-a)*(b*np.sinh(E))
     return np.arctan2(y,x)
 
 def true_anomaly_to_mean_anomaly(f, ecc):
@@ -1203,25 +1231,83 @@ e is eccentricity.
         2.*e*np.sin(f) + \
         (0.75*e**2. + 0.125*e**4.)*np.sin(2.*f) - \
         1./3.*e**3.*np.sin(3.*f) + \
-        5./32.*e**4.*np.sin(4.*f)
+        5./32.*e**4.*np.sin(4.*f)        
 
-def mean_anomaly_to_true_anomaly_test(decc=1e-1, N=1024, K=5, newton_max_loops=100, plot=True):
-    ecc = np.arange(0, 1, decc)
+def mean_anomaly_to_true_anomaly_test(decc=1e-1, ecc_0=0, N=1024, K=5, max_loops=100, plot=True, progress=True):
+    ecc = np.arange(ecc_0, 1-decc/10., decc)
     acc_newton = np.empty((ecc.size, K))
     acc_series = np.empty((ecc.size, K))
     for i in range(ecc.size):
+        if progress:
+            sys.stdout.write('\r ecc={:.6f}'.format(ecc[i]))
+            sys.stdout.flush()
         f = np.random.rand(N, K)*2.*np.pi
         M = true_anomaly_to_mean_anomaly(f, ecc[i])
-        E = eccentric_anomaly(M, ecc[i], max_loops=newton_max_loops)
+        init = np.copy(M)
+        t = 0
+        while True:
+            try:
+                E = eccentric_anomaly(M, ecc[i], init=init, max_loops=max_loops)
+                break
+            except KeplerError as e:
+                init = e.E
+                t = t+e.loops
+                max_loops = t
+                warnings.warn('max_loops reached. increase max_loops to {:d} and continue.'.format(max_loops), RuntimeWarning)
         f_newton = true_anomaly(E, ecc[i])
         f_series = mean_anomaly_to_true_anomaly_series(M, ecc[i])
         acc_newton[i,:] = np.std(((np.sin(f_newton)-np.sin(f))**2.+(np.cos(f_newton)-np.cos(f))**2.)**.5, axis=0)
         acc_series[i,:] = np.std(((np.sin(f_series)-np.sin(f))**2.+(np.cos(f_series)-np.cos(f))**2.)**.5, axis=0)
     if plot:
         import matplotlib.pyplot as plt
-        plt.errorbar(ecc, np.mean(acc_newton, axis=-1), np.max(acc_newton, axis=-1)-np.min(acc_newton, axis=-1), label='Newton')
-        plt.errorbar(ecc, np.mean(acc_series, axis=-1), np.max(acc_series, axis=-1)-np.min(acc_series, axis=-1), label='Series')
-        plt.xlabel('Eccentricity')
-        plt.ylabel('Accuracy')
+        fig = plt.figure()
+        ax  = fig.add_subplot(111)
+        ax.errorbar(1.0-ecc, np.mean(acc_newton, axis=-1), np.max(acc_newton, axis=-1)-np.min(acc_newton, axis=-1), label='Newton')
+        ax.errorbar(1.0-ecc, np.mean(acc_series, axis=-1), np.max(acc_series, axis=-1)-np.min(acc_series, axis=-1), label='Series')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlabel('Non-eccentricity')
+        ax.set_ylabel('Accuracy')
+        plt.legend(loc='upper left')
         plt.show()
     return acc_newton, acc_series
+
+def kepler_equation_test(decc=1e-2, N=1024, K=5, max_loops=1000000, quiet=False, plot=True):
+    """Kepler's equation test
+Kepler's equation:
+M = E - e*sin(E),
+where E is eccentric anomaly, e is eccentricity and M is mean anomaly.
+"""
+    ecc = np.arange(.9, 1-decc/10, decc)
+    nit = np.zeros((ecc.size, K))
+    for i in range(ecc.size):
+        for k in range(K):
+            if not quiet:
+                sys.stdout.write('\r ecc={:.4f}, run {:>4d}/{:d}...'.format(ecc[i], k, K))
+                sys.stdout.flush()
+            M = np.random.rand(N)*2.*np.pi
+            E = M
+            t = 0
+            d = np.pi
+            while not np.allclose(d, 0.):
+                d = ne.evaluate('(E-ecc*sin(E)-M)/(1.0-ecc*cos(E))', local_dict={'E':E,'M':M,'ecc':ecc[i]})
+                E = E - d
+                t = t+1
+                assert t<max_loops, 'max_loops limit reached.'
+            nit[i,k] = t+1
+    if plot:
+        import matplotlib.pyplot as plt
+        fig = plt.figure()
+        ax  = fig.add_subplot(111)
+        ax.plot(1.-ecc, np.min(nit, axis=-1), label='min')
+        ax.plot(1.-ecc, np.percentile(nit, 50., axis=-1), label='50')
+        ax.plot(1.-ecc, np.percentile(nit, 90., axis=-1), label='90')
+        ax.plot(1.-ecc, np.percentile(nit, 95., axis=-1), label='95')
+        ax.plot(1.-ecc, np.max(nit, axis=-1), label='max')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlabel('Non-eccentricity')
+        ax.set_ylabel('Number of iternations')
+        plt.legend(loc='upper right')
+        plt.show()
+    return ecc,nit
