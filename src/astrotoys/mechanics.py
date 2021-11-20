@@ -732,6 +732,7 @@ Ome - longitude of ascending node, in rad
 ome - argument of periapsis, in rad
 nu  - true anomaly, in rad
 """
+    _, _, mu = map(np.copy, np.broadcast_arrays(r[0], v[0], mu))
     h = np.array([r[1]*v[2]-r[2]*v[1],r[2]*v[0]-r[0]*v[2],r[0]*v[1]-r[1]*v[0]])
     hmag = quaternion.norm(h)
     nhat = np.array([-h[1], h[0], np.zeros_like(h[2])])
