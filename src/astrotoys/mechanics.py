@@ -735,6 +735,7 @@ Ome - longitude of ascending node, in rad
 ome - argument of periapsis, in rad
 nu  - true anomaly, in rad
 """
+    _, _, mu = map(np.copy, np.broadcast_arrays(r[0], v[0], mu))
     h = np.array([r[1]*v[2]-r[2]*v[1],r[2]*v[0]-r[0]*v[2],r[0]*v[1]-r[1]*v[0]])
     hmag = quaternion.norm(h)
     nhat = np.array([-h[1], h[0], np.zeros_like(h[2])])
@@ -1164,12 +1165,11 @@ The eccentric anomaly E is calculated by solving the following equation
 with Newton's method:
 M = E - ecc * sin(E)
 """
-    M, ecc, d = map(np.copy, np.broadcast_arrays(M, ecc, np.pi))
-    solved = np.zeros(M.shape, dtype='bool')
     if init is None:
-        E = np.copy(M)
-    else:
-        E = init
+        init = np.copy(M)
+    M, ecc, d, init = map(np.copy, np.broadcast_arrays(M, ecc, np.pi, init))
+    solved = np.zeros(M.shape, dtype='bool')
+    E = init
     t = 0
     while True:
         d[~solved] = ne.evaluate(
