@@ -172,8 +172,11 @@ t0  - epoch, in JD
     def state_when(self, t):
         """Return state vector(s) at given time, in JD.
 """
-        M  = np.mod(self.M0 + np.sqrt(self.mu/self.a**3.)*(t-self.t0), 2.*np.pi)
-        nu = true_anomaly(eccentric_anomaly(M, self.ecc), self.ecc)
+        M  = np.mod(self.M0 + np.sqrt(self.mu/np.abs(self.a)**3.)*(t-self.t0), 2.*np.pi)
+        if self.ecc<1.0:
+            nu = true_anomaly(eccentric_anomaly(M, self.ecc, max_loops=10000), self.ecc)
+        else:
+            nu = true_anomaly(hyperbolic_anomaly(M, self.ecc, max_loops=10000), self.ecc)
         return self.state(nu)
 class SatelliteOrbit(Orbit):
     def __init__(self, a, ecc, inc, Ome, ome, nu0=0., t0=0.):
@@ -1129,7 +1132,7 @@ class KeplerError(RuntimeError):
         self.loops=loops
         super().__init__('max_loops reachded.')
 
-def hyperbolic_anomaly(M, ecc, max_loops=100):
+def hyperbolic_anomaly(M, ecc, max_loops=1000):
     """Calculate hyperbolic anomaly from mean anomaly and eccentricity.
 
 M is mean anomaly.
@@ -1144,13 +1147,13 @@ M = ecc * sinh(H) - H
     t  = 0
     d  = np.pi
     while t < max_loops and not np.allclose(d, 0.):
-        Hn = ne('arcsinh((H+M)/ecc')
+        Hn = ne.evaluate('arcsinh((H+M)/ecc)')
         d  = Hn - H
         H  = Hn
         t += 1
     return H
 
-def eccentric_anomaly(M, ecc, init=None, max_loops=100, tol=1e-10):
+def eccentric_anomaly(M, ecc, init=None, max_loops=1000, tol=1e-10):
     """Calculate eccentric anomaly from mean anomaly and eccentricity.
 
 M         is mean anomaly.
@@ -1205,8 +1208,17 @@ def true_anomaly_to_mean_anomaly(f, ecc):
 f is true anomaly, in rad.
 e is eccentricity.
 """
-    E = np.arctan2(np.sqrt(1. - ecc**2.)*np.sin(f), ecc + np.cos(f))
-    return E - ecc*np.sin(E)
+    E,M,f,ecc = map(np.copy, np.broadcast_arrays(0, 0, f, ecc))
+    is_par = np.isclose(ecc, 1.0)
+    is_ecc = np.bool_(ecc<1.0) & (~is_par)
+    is_hyp = np.bool_(ecc>1.0) & (~is_par)
+    E[is_par] = np.tan(f[is_par])
+    M[is_par] = .5*(E+(E**3.)/3.)
+    E[is_ecc] = np.arctan2(np.sqrt(1. - ecc[is_ecc]**2.)*np.sin(f[is_ecc]), ecc[is_ecc]+np.cos(f[is_ecc]))
+    M[is_ecc] = E[is_ecc] - ecc[is_ecc]*np.sin(E[is_ecc])
+    E[is_hyp] = 2.*np.arctanh((ecc[is_hyp]-1.)/(ecc[is_hyp]+1.)*np.tan(f[is_hyp]/2.))
+    M[is_hyp] = ecc[is_hyp]*np.sinh(E[is_hyp]) - E[is_hyp]
+    return M
 
 def mean_anomaly_to_true_anomaly_series(M, ecc):
     """Compute true anomaly from eccentricity and mean anomaly with series expansion.
