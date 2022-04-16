@@ -30,7 +30,7 @@ mu_SI = {
 }
 DEPS = np.finfo('float64').eps
 class Orbit(object):
-    def __init__(self, a, ecc, inc, Ome, ome, nu0=0., t0=0., mu=1.):
+    def __init__(self, a, ecc, inc, Ome, ome, M0=None, nu0=None, t0=0., mu=1.):
         """Construct an elliptical orbit by elements.
 a   - semi-major axis
 ecc - eccentricity
@@ -52,10 +52,17 @@ mu  - standard gravitational parameter (default: 1.)
         self.inc = inc
         self.Ome = Ome
         self.ome = ome
-        self.nu0 = nu0
         self.t0  = t0
         self.mu  = mu
-        self.M0  = true_anomaly_to_mean_anomaly(self.nu0, self.ecc)
+        if M0 is None:
+            if nu0 is None:
+                self.nu0 = 0.
+            else:
+                self.nu0 = nu0
+            self.M0  = true_anomaly_to_mean_anomaly(self.nu0, self.ecc)
+        else:
+            self.M0 = M0
+            self.nu0 = true_anomaly(eccentric_anomaly(self.M0, self.ecc), self.ecc)
     def pprint(self):
         """Print with pretty format.
 """
@@ -143,7 +150,7 @@ from nu=0 to nu=2*PI on the orbit.
         self.ome = np.mod(np.pi-self.ome, 2.*np.pi)
         self.nu0 = np.mod(     -self.nu0, 2.*np.pi)
 class PlanetOrbit(Orbit):
-    def __init__(self, a, ecc, inc, Ome, ome, nu0=0., t0=0.):
+    def __init__(self, a, ecc, inc, Ome, ome, M0=None, nu0=None, t0=0.):
         """Construct an orbit for a planet-like object of solar system,
 such as planets, asteroids as well as comets.
 
@@ -157,7 +164,7 @@ nu0 - true anomaly at epoch, in rad
 t0  - epoch, in JD
 """
         super(PlanetOrbit, self).__init__(
-            a, ecc, inc, Ome, ome, nu0=nu0, t0=t0,
+            a, ecc, inc, Ome, ome, M0=M0, nu0=nu0, t0=t0,
             mu=mu_SI['sun'] / (AU_to_km*1e3)**3. * (86400.**2.))
     def pprint(self):
         """Print with pretty format.
@@ -179,7 +186,7 @@ t0  - epoch, in JD
             nu = true_anomaly(hyperbolic_anomaly(M, self.ecc, max_loops=10000), self.ecc)
         return self.state(nu)
 class SatelliteOrbit(Orbit):
-    def __init__(self, a, ecc, inc, Ome, ome, nu0=0., t0=0.):
+    def __init__(self, a, ecc, inc, Ome, ome, M0=None, nu0=None, t0=0.):
         """Construct an orbit for an Earth-orbit satellite.
 
 Arguments:
@@ -191,7 +198,7 @@ ome - argument of perigee, in rad
 nu0 - true anomaly at epoch, in rad
 t0  - epoch, in JD
 """
-        super(SatelliteOrbit, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=mu_SI['earth']/1e9)
+        super(SatelliteOrbit, self).__init__(a, ecc, inc, Ome, ome, M0=M0, nu0=nu0, t0=t0, mu=mu_SI['earth']/1e9)
     def pprint(self):
         """Print with pretty format.
 """
@@ -211,7 +218,7 @@ t0  - epoch, in JD
         return self.state(nu)
 
 class Trajectory(Orbit):
-    def __init__(self, a, ecc, inc, Ome, ome, nu_ends, nu0=0., t0=0., mu=1.):
+    def __init__(self, a, ecc, inc, Ome, ome, nu_ends, M0=None, nu0=None, t0=0., mu=1.):
         """Construct an elliptical trajectory by elements and extra parameters.
 
 Arguments:
@@ -225,7 +232,7 @@ nu0     - true anomaly at epoch, in rad
 t0      - epoch
 mu      - standard gravitational parameter
 """
-        super(Trajectory, self).__init__(a, ecc, inc, Ome, ome, nu0=nu0, t0=t0, mu=mu)
+        super(Trajectory, self).__init__(a, ecc, inc, Ome, ome, M0=M0, nu0=nu0, t0=t0, mu=mu)
         self.nu_start, self.nu_stop = np.mod(nu_ends, 2.*np.pi)
     def pprint(self):
         super(Trajectory, self).pprint()
@@ -249,7 +256,7 @@ together with the current trajectory.
         self.nu_start = np.mod(-self.nu_start, 2.*np.pi)
         self.nu_stop  = np.mod(-self.nu_stop,  2.*np.pi)
 class RocketTrajectory(Trajectory):
-    def __init__(self, a, ecc, inc, Ome, ome, nu_ends, nu0=0., t0=0.):
+    def __init__(self, a, ecc, inc, Ome, ome, nu_ends, M0=None, nu0=None, t0=0.):
         """Construct an elliptical trajectory for a rocket launched from the Earth.
 
 Arguments:
@@ -262,7 +269,7 @@ nu_ends - true anomalies of the two endpoints of the trajectory, in (nu_start, n
 nu0     - true anomaly at epoch, in rad
 t0      - epoch, in JD
 """
-        super(RocketTrajectory, self).__init__(a, ecc, inc, Ome, ome, nu_ends, nu0=nu0, t0=t0, mu=mu_SI['earth']/1e9)
+        super(RocketTrajectory, self).__init__(a, ecc, inc, Ome, ome, nu_ends, M0=M0, nu0=nu0, t0=t0, mu=mu_SI['earth']/1e9)
     def pprint(self):
         """Print with pretty format.
 """
