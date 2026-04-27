@@ -26,6 +26,7 @@ from getopt import gnu_getopt
 from os import path
 from astrotoys.formats import gdr2_csv_dtype, gdr3_csv_dtype
 import csv
+from io import StringIO
 
 def load_gdr2_csv(input_file, verbose=False, debug=False):
     tic=time.time()
@@ -87,13 +88,16 @@ def load_gdr3_csv(input_file, verbose=False, debug=False):
     tic=time.time()
     d = {}
     with gzip.open(input_file, 'rt') as f:
-        reader = csv.DictReader(f)
-        for name in reader.fieldnames:
-            d[name] = []
-        for row in reader:
-            for name in row:
-                if name in d:
-                    d[name].append(row[name])
+        # Skip comment lines (YAML header present in GDR3)
+        non_comment_lines = [line for line in f if not line.startswith('#')]
+    data = StringIO(''.join(non_comment_lines))
+    reader = csv.DictReader(data)
+    for name in reader.fieldnames:
+        d[name] = []
+    for row in reader:
+        for name in row:
+            if name in d:
+                d[name].append(row[name])
     n = len(d['source_id'])
     if verbose:
         print(u'input file {} has been loaded.'.format(input_file))
