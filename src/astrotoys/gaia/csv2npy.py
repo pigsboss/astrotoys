@@ -46,7 +46,7 @@ def load_gdr2_csv(input_file, verbose=False, debug=False):
     a = np.zeros((n,), dtype=gdr2_csv_dtype)
     for name in a.dtype.fields:
         if a[name].dtype.kind == 'b':
-            a[name] = np.bool(d[name] == 'true')
+            a[name] = [v.strip().lower() == 'true' for v in d[name]]
         elif a[name].dtype.kind == 'f':
             try:
                 a[name] = d[name]
@@ -107,7 +107,7 @@ def load_gdr3_csv(input_file, verbose=False, debug=False):
     a = np.zeros((n,), dtype=gdr3_csv_dtype)
     for name in a.dtype.fields:
         if a[name].dtype.kind == 'b':
-            a[name] = np.bool(d[name] == 'true')
+            a[name] = [v.strip().lower() == 'true' for v in d[name]]
         elif a[name].dtype.kind == 'f':
             try:
                 a[name] = d[name]
