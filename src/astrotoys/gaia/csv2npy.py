@@ -52,31 +52,33 @@ def load_gdr2_csv(input_file, verbose=False, debug=False):
                 a[name] = d[name]
             except ValueError as e:
                 if debug:
-                    print(u'irregular input detected: {:>8}, {}'.format(a[name].dtype, name))
+                    print(u'irregular input detected: {:>8}, {}'.format(str(a[name].dtype), name))
                 for i in range(n):
-                    if len(d[name][i]) > 0:
+                    val = d[name][i].strip().lower()
+                    if len(d[name][i]) == 0 or val == 'null':
+                        a[name][i] = np.nan
+                    else:
                         try:
                             a[name][i] = d[name][i]
                         except ValueError as e:
-                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, a[name].dtype, d[name][i]))
+                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, str(a[name].dtype), d[name][i]))
                             raise e
-                    else:
-                        a[name][i] = np.nan
         elif a[name].dtype.kind == 'i':
             try:
                 a[name] = d[name]
             except ValueError as e:
                 if debug:
-                    print(u'irregular input detected: {:>8}, {}'.format(a[name].dtype, name))
+                    print(u'irregular input detected: {:>8}, {}'.format(str(a[name].dtype), name))
                 for i in range(n):
-                    if len(d[name][i]) > 0:
+                    val = d[name][i].strip().lower()
+                    if len(d[name][i]) == 0 or val == 'null':
+                        a[name][i] = -1
+                    else:
                         try:
                             a[name][i] = d[name][i]
                         except ValueError as e:
-                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, a[name].dtype, d[name][i]))
+                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, str(a[name].dtype), d[name][i]))
                             raise e
-                    else:
-                        a[name][i] = -1
         elif a[name].dtype.kind == 'U':
             a[name] = d[name]
     toc=time.time()
@@ -111,31 +113,33 @@ def load_gdr3_csv(input_file, verbose=False, debug=False):
                 a[name] = d[name]
             except ValueError as e:
                 if debug:
-                    print(u'irregular input detected: {:>8}, {}'.format(a[name].dtype, name))
+                    print(u'irregular input detected: {:>8}, {}'.format(str(a[name].dtype), name))
                 for i in range(n):
-                    if len(d[name][i]) > 0:
+                    val = d[name][i].strip().lower()
+                    if len(d[name][i]) == 0 or val == 'null':
+                        a[name][i] = np.nan
+                    else:
                         try:
                             a[name][i] = d[name][i]
                         except ValueError as e:
-                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, a[name].dtype, d[name][i]))
+                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, str(a[name].dtype), d[name][i]))
                             raise e
-                    else:
-                        a[name][i] = np.nan
         elif a[name].dtype.kind == 'i':
             try:
                 a[name] = d[name]
             except ValueError as e:
                 if debug:
-                    print(u'irregular input detected: {:>8}, {}'.format(a[name].dtype, name))
+                    print(u'irregular input detected: {:>8}, {}'.format(str(a[name].dtype), name))
                 for i in range(n):
-                    if len(d[name][i]) > 0:
+                    val = d[name][i].strip().lower()
+                    if len(d[name][i]) == 0 or val == 'null':
+                        a[name][i] = -1
+                    else:
                         try:
                             a[name][i] = d[name][i]
                         except ValueError as e:
-                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, a[name].dtype, d[name][i]))
+                            print(u'illegal input detected: {:>32} = ({:>8}) {}'.format(name, str(a[name].dtype), d[name][i]))
                             raise e
-                    else:
-                        a[name][i] = -1
         elif a[name].dtype.kind == 'U':
             a[name] = d[name]
     toc=time.time()
