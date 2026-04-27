@@ -36,7 +36,8 @@ def load_gdr2_csv(input_file, verbose=False, debug=False):
             d[name] = []
         for row in reader:
             for name in row:
-                d[name].append(row[name])
+                if name in d:
+                    d[name].append(row[name])
     n = len(d['source_id'])
     if verbose:
         print(u'input file {} has been loaded.'.format(input_file))
@@ -91,7 +92,8 @@ def load_gdr3_csv(input_file, verbose=False, debug=False):
             d[name] = []
         for row in reader:
             for name in row:
-                d[name].append(row[name])
+                if name in d:
+                    d[name].append(row[name])
     n = len(d['source_id'])
     if verbose:
         print(u'input file {} has been loaded.'.format(input_file))
