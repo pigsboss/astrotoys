@@ -12,6 +12,7 @@ Options:
   -l  compress library (Default: blosc).
   -t  table title (Default: table of selected fields).
   -p  parallel processes (Default: 1).
+  -3  use Gaia DR3 format (default is DR2).
 
 Examples:
   npy2table.py ./ gaia.h5:/table_full
@@ -31,15 +32,15 @@ from time import time
 from multiprocessing import cpu_count, Queue, Process
 from subprocess import run, DEVNULL, PIPE
 from os import path
-from astrotoys.formats import gdr2_csv_dtype
+from astrotoys.formats import gdr2_csv_dtype, gdr3_csv_dtype
 from numpy.lib.recfunctions import repack_fields
 
-def import_npy(qin, qout, fields):
+def import_npy(qin, qout, fields, dtype):
     """Import NPY file.
 """
     npyfilename = qin.get()
     while npyfilename is not None:
-        a = np.memmap(npyfilename, dtype=gdr2_csv_dtype, mode='r')
+        a = np.memmap(npyfilename, dtype=dtype, mode='r')
         if fields is None:
             qout.put(a[:])
         else:
@@ -100,7 +101,8 @@ def main():
     compress_level = 0
     table_title = ''
     nworkers = 1
-    opts, args = gnu_getopt(sys.argv[1:], 'hf:c:l:t:p:')
+    dr3 = False
+    opts, args = gnu_getopt(sys.argv[1:], 'hf:c:l:t:p:3')
     for opt, val in opts:
         if opt == '-h':
             print(__doc__)
@@ -115,6 +117,8 @@ def main():
             table_title = val
         elif opt == '-p':
             nworkers = int(val)
+        elif opt == '-3':
+            dr3 = True
         else:
             assert False, 'unhandled option'
     source_dirname = path.normpath(path.abspath(args[0]))
@@ -131,14 +135,15 @@ def main():
         npysizes.append(int(cols[6]))
     nnpys = len(npyfiles)
     npysizes = np.int64(npysizes)
-    expectedrows = np.sum(npysizes) // gdr2_csv_dtype.itemsize
+    dtype = gdr3_csv_dtype if dr3 else gdr2_csv_dtype
+    expectedrows = np.sum(npysizes) // dtype.itemsize
     print(u"{} Numpy files found.".format(nnpys))
     print(u"{} entries to be copied.".format(expectedrows))
     q_files = Queue()
     q_array = Queue(2*nworkers+1)
     importers = []
     for i in range(nworkers):
-        proc = Process(target=import_npy, args=(q_files, q_array, fields))
+        proc = Process(target=import_npy, args=(q_files, q_array, fields, dtype))
         proc.start()
         importers.append(proc)
     exporter = Process(target=export_table, args=(
