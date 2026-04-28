@@ -1,26 +1,26 @@
 #!/usr/bin/env python
-#coding=utf-8
+# -*- coding: utf-8 -*-
 """Copy selected fields from all binary NumPy files in one directory into a single HDF5 table.
 
 Syntax:
-  npy2table.py [options] input_path output_hdf5_table
+  npy2table.py [options] input_dir output.h5:/table_path
 
 Options:
-  -h  print this help message.
-  -f  fields.
-  -c  compress level (Default: 0).
-  -l  compress library (Default: blosc).
-  -t  table title (Default: table of selected fields).
-  -p  parallel processes (Default: 1).
-  -3  use Gaia DR3 format (default is DR2).
+  -h            print this help.
+  -f fields     comma-separated column names (no spaces), e.g. "source_id,ra,dec"
+                Use column names from the original Gaia CSV header.
+                Common fields: source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag
+  -c level      compression level (0-9, default 0 = no compression).
+  -l library    compression library: blosc (default), zlib, lzo, bzip2.
+  -t title      description stored in the HDF5 table attribute (default: 'table of selected fields').
+  -p N          number of parallel reader processes (default 1). Use CPU count with caution due to memory.
+  -3            treat input as Gaia DR3 format instead of DR2 (use only if numpy files were generated with -3).
 
 Examples:
-  npy2table.py ./ gaia.h5:/table_full
-  copy all fields into gaia.h5:/table_full
-
-  npy2table.py -f "source_id,ra,dec" ./ gaia.h5:/table_simple
-  copy specified fields into gaia.h5:/table_simple
-
+  npy2table.py ./ gaia.h5:/full                       # copy all fields
+  npy2table.py -f "ra,dec" ./ gaia.h5:/pos             # selected fields
+  npy2table.py -f "ra,dec" -c 9 -l blosc -p 4 ./ gaia.h5:/pos_compressed
+  npy2table.py -3 -f "source_id,ra,dec" /data/dr3 gaia_dr3.h5:/astrometry
 """
 
 import tables
